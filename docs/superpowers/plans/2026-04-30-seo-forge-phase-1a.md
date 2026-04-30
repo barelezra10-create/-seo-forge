@@ -162,7 +162,7 @@ coverage/
 - [ ] **Step 5: Create `.env.example`**
 
 ```
-# Postgres (local — Postgres.app)
+# Postgres (local - Postgres.app)
 DATABASE_URL=postgres://seo_forge:seo_forge@localhost:5432/seo_forge
 
 # API keys
