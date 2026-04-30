@@ -600,7 +600,7 @@ export const authStatus = pgTable("auth_status", {
 });
 ```
 
-Note: vector dimensions = **1024** to match Voyage `voyage-3-lite` output. Update if you switch models.
+Note: vector dimensions = **1024** to match Voyage `voyage-3.5-lite` output. Update if you switch models.
 
 - [ ] **Step 6: Implement `shared/src/db/client.ts`**
 
@@ -918,7 +918,7 @@ export async function embedText(
     },
     body: JSON.stringify({
       input: inputs,
-      model: "voyage-3-lite",
+      model: "voyage-3.5-lite",
       input_type: "document",
     }),
   });
@@ -948,7 +948,7 @@ Expected: 2 passing.
 
 ```bash
 git add worker/src/embeddings/
-git commit -m "feat(worker): add Voyage AI embeddings client (voyage-3-lite, 1024 dim)"
+git commit -m "feat(worker): add Voyage AI embeddings client (voyage-3.5-lite, 1024 dim)"
 ```
 
 ---
@@ -2827,7 +2827,7 @@ git push origin phase-1a-shipped
 - 3-failure auto-brake
 
 **Open questions captured in spec section 13 — what this plan resolves:**
-- ✅ Embedding model: Voyage `voyage-3-lite` (1024 dim) — Task 7
+- ✅ Embedding model: Voyage `voyage-3.5-lite` (1024 dim) — Task 7
 - (Deferred) Dashboard auth: handled in Plan 1B
 - (Deferred) Job transcript storage: handled in Plan 1B
 - (Pending Bar) Repo rename `-seo-forge` → `seo-forge`
