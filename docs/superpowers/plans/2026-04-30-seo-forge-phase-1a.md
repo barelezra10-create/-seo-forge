@@ -702,7 +702,7 @@ await db
     id: "mca-guide",
     name: "The MCA Guide",
     domain: "themcaguide.com",
-    repoUrl: process.env.MCA_GUIDE_REPO_URL ?? "git@github.com-barelezra10:barelezra10-create/the-mca-guide.git",
+    repoUrl: process.env.MCA_GUIDE_REPO_URL ?? "git@github.com:barcoastal/themcaguide.git",
     branch: "main",
     contentDir: process.env.MCA_GUIDE_CONTENT_DIR ?? "content/articles",
     fileFormat: "mdx",
