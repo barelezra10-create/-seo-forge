@@ -1,0 +1,16 @@
+{
+  "name": "seo-forge",
+  "private": true,
+  "version": "0.0.1",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "cli": "pnpm --filter worker cli"
+  },
+  "engines": {
+    "node": ">=20.10.0"
+  }
+}
