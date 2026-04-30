@@ -55,6 +55,7 @@ export const jobs = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     attempts: integer("attempts").notNull().default(0),
+    /** Stored as USD cents (integer). Sub-cent costs round up. */
     costUsd: integer("cost_usd").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -81,6 +82,7 @@ export const contentIndex = pgTable(
     lastIndexed: timestamp("last_indexed", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    // URL is globally unique (host is part of the URL, so cross-site collisions don't happen).
     urlIdx: uniqueIndex("content_index_url_idx").on(t.url),
     siteIdx: index("content_index_site_idx").on(t.siteId),
   }),
