@@ -31,4 +31,17 @@ describe("parseEnv", () => {
     });
     expect(env.WORKSPACE_REPOS_DIR).toBe("./workspace/repos");
   });
+
+  it("rejects DATABASE_URL with non-postgres scheme", () => {
+    expect(() =>
+      parseEnv({
+        DATABASE_URL: "redis://localhost:6379",
+        VOYAGE_API_KEY: "k1",
+        AHREFS_API_KEY: "k2",
+        GSC_REFRESH_TOKEN: "k3",
+        ANTHROPIC_API_KEY: "k4",
+        GH_PAT_MCA_GUIDE: "k5",
+      }),
+    ).toThrow();
+  });
 });
