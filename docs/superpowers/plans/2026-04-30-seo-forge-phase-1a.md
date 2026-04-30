@@ -4,7 +4,7 @@
 
 **Goal:** From a fresh terminal, run `pnpm cli publish --site mca-guide` and a fully formed, GEO-optimized article appears live on themcaguide.com.
 
-**Architecture:** TypeScript pnpm monorepo. `shared/` defines types, env validation, and the Drizzle DB schema. `worker/` contains all job logic, the Claude Code subprocess wrapper, site adapters, the git publisher, and a CLI entry point. No web/dashboard yet (Plan 1B). No Railway deploy yet (Plan 1B). Local Postgres via docker-compose.
+**Architecture:** TypeScript pnpm monorepo. `shared/` defines types, env validation, and the Drizzle DB schema. `worker/` contains all job logic, the Claude Code subprocess wrapper, site adapters, the git publisher, and a CLI entry point. No web/dashboard yet (Plan 1B). No Railway deploy yet (Plan 1B). Local Postgres via Postgres.app.
 
 **Tech Stack:** TypeScript 5.6, pnpm workspaces, Vitest, Drizzle ORM, Postgres 16 + pgvector, simple-git, Anthropic API for Claude (subscription auth via `claude-code` CLI subprocess), Voyage AI for embeddings, Ahrefs API v3, Google Search Console API.
 
@@ -24,7 +24,7 @@ seo-forge/
 ├── package.json                          # workspaces root
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
-├── docker-compose.yml                    # local postgres
+├── scripts/db-setup.sh                   # local postgres setup (Postgres.app)
 ├── .env.example
 ├── .gitignore
 ├── shared/
@@ -162,8 +162,8 @@ coverage/
 - [ ] **Step 5: Create `.env.example`**
 
 ```
-# Postgres (local docker-compose)
-DATABASE_URL=postgres://seo_forge:seo_forge@localhost:5433/seo_forge
+# Postgres (local — Postgres.app)
+DATABASE_URL=postgres://seo_forge:seo_forge@localhost:5432/seo_forge
 
 # API keys
 VOYAGE_API_KEY=
@@ -190,77 +190,98 @@ git commit -m "chore: initialize pnpm monorepo with workspaces"
 
 ---
 
-## Task 2: Set up local Postgres + pgvector
+## Task 2: Set up local Postgres + pgvector (via Postgres.app)
+
+**Note:** Plan revised 2026-04-30: Bar's Mac has Postgres.app installed (Postgres 17, pgvector 0.8.0 available) but not Docker. Skipping docker-compose; using Postgres.app's running server on `localhost:5432`. The connection string in `.env.example` must be updated from port 5433 to 5432.
 
 **Files:**
-- Create: `docker-compose.yml`, `scripts/db-up.sh`, `scripts/db-down.sh`
+- Create: `scripts/db-setup.sh`, `scripts/db-reset.sh`
+- Modify: `.env.example` (port 5433 → 5432)
 
-- [ ] **Step 1: Create `docker-compose.yml`**
-
-```yaml
-services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    container_name: seo-forge-pg
-    environment:
-      POSTGRES_USER: seo_forge
-      POSTGRES_PASSWORD: seo_forge
-      POSTGRES_DB: seo_forge
-    ports:
-      - "5433:5432"
-    volumes:
-      - seo_forge_pg:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U seo_forge"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-volumes:
-  seo_forge_pg:
-```
-
-- [ ] **Step 2: Create `scripts/db-up.sh`**
+- [ ] **Step 1: Create `scripts/db-setup.sh`**
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-docker compose up -d postgres
-docker compose exec postgres bash -c "until pg_isready -U seo_forge; do sleep 1; done"
-docker compose exec postgres psql -U seo_forge -d seo_forge -c "CREATE EXTENSION IF NOT EXISTS vector;"
-echo "Postgres ready on localhost:5433"
+
+PG_BIN="/Applications/Postgres.app/Contents/Versions/latest/bin"
+PG_HOST="localhost"
+PG_PORT="5432"
+PG_SUPERUSER="postgres"
+DB_NAME="seo_forge"
+DB_USER="seo_forge"
+DB_PASS="seo_forge"
+
+if ! "$PG_BIN/pg_isready" -h "$PG_HOST" -p "$PG_PORT" -q; then
+  echo "ERROR: Postgres is not accepting connections at $PG_HOST:$PG_PORT" >&2
+  echo "Open Postgres.app and click 'Start' on the default server." >&2
+  exit 1
+fi
+
+"$PG_BIN/psql" -h "$PG_HOST" -p "$PG_PORT" -U "$PG_SUPERUSER" -d postgres -v ON_ERROR_STOP=1 <<SQL
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$DB_USER') THEN
+    CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASS';
+  END IF;
+END
+\$\$;
+
+ALTER ROLE $DB_USER CREATEDB;
+SQL
+
+if ! "$PG_BIN/psql" -h "$PG_HOST" -p "$PG_PORT" -U "$PG_SUPERUSER" -d postgres -tAc \
+    "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
+  "$PG_BIN/createdb" -h "$PG_HOST" -p "$PG_PORT" -U "$PG_SUPERUSER" -O "$DB_USER" "$DB_NAME"
+fi
+
+"$PG_BIN/psql" -h "$PG_HOST" -p "$PG_PORT" -U "$PG_SUPERUSER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -c \
+  "CREATE EXTENSION IF NOT EXISTS vector;"
+
+echo "Postgres ready: postgres://$DB_USER:$DB_PASS@$PG_HOST:$PG_PORT/$DB_NAME"
 ```
 
-- [ ] **Step 3: Create `scripts/db-down.sh`**
+- [ ] **Step 2: Create `scripts/db-reset.sh`** (drops the DB and re-runs setup; for dev use only)
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-docker compose down
+
+PG_BIN="/Applications/Postgres.app/Contents/Versions/latest/bin"
+"$PG_BIN/dropdb" -h localhost -p 5432 -U postgres --if-exists seo_forge
+exec "$(dirname "$0")/db-setup.sh"
 ```
 
-- [ ] **Step 4: Make scripts executable and start the DB**
+- [ ] **Step 3: Make scripts executable and run setup**
 
 ```bash
-chmod +x scripts/db-up.sh scripts/db-down.sh
-./scripts/db-up.sh
+chmod +x scripts/db-setup.sh scripts/db-reset.sh
+./scripts/db-setup.sh
 ```
 
-Expected output: `Postgres ready on localhost:5433`
+Expected output: `Postgres ready: postgres://seo_forge:seo_forge@localhost:5432/seo_forge`
 
-- [ ] **Step 5: Verify pgvector is installed**
+- [ ] **Step 4: Verify pgvector is enabled in the seo_forge database**
 
 ```bash
-docker compose exec postgres psql -U seo_forge -d seo_forge -c "SELECT extname FROM pg_extension WHERE extname = 'vector';"
+/Applications/Postgres.app/Contents/Versions/latest/bin/psql -h localhost -p 5432 -U postgres -d seo_forge -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
 ```
 
-Expected: `vector` row returned.
+Expected: one row, `vector | 0.8.0` (or higher).
+
+- [ ] **Step 5: Update `.env.example`** to use port 5432 instead of 5433
+
+Modify the `DATABASE_URL` line:
+
+```
+DATABASE_URL=postgres://seo_forge:seo_forge@localhost:5432/seo_forge
+```
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add docker-compose.yml scripts/
-git commit -m "chore: add local postgres with pgvector via docker-compose"
+git add scripts/db-setup.sh scripts/db-reset.sh .env.example
+git commit -m "chore: add postgres setup scripts (Postgres.app, port 5432) + enable pgvector"
 ```
 
 ---
@@ -327,7 +348,7 @@ import { parseEnv } from "./env";
 describe("parseEnv", () => {
   it("parses a complete env object", () => {
     const env = parseEnv({
-      DATABASE_URL: "postgres://u:p@localhost:5433/db",
+      DATABASE_URL: "postgres://u:p@localhost:5432/db",
       VOYAGE_API_KEY: "k1",
       AHREFS_API_KEY: "k2",
       GSC_REFRESH_TOKEN: "k3",
@@ -335,7 +356,7 @@ describe("parseEnv", () => {
       GH_PAT_MCA_GUIDE: "k5",
       WORKSPACE_REPOS_DIR: "./workspace/repos",
     });
-    expect(env.DATABASE_URL).toBe("postgres://u:p@localhost:5433/db");
+    expect(env.DATABASE_URL).toBe("postgres://u:p@localhost:5432/db");
     expect(env.VOYAGE_API_KEY).toBe("k1");
   });
 
@@ -345,7 +366,7 @@ describe("parseEnv", () => {
 
   it("defaults WORKSPACE_REPOS_DIR if absent", () => {
     const env = parseEnv({
-      DATABASE_URL: "postgres://u:p@localhost:5433/db",
+      DATABASE_URL: "postgres://u:p@localhost:5432/db",
       VOYAGE_API_KEY: "k1",
       AHREFS_API_KEY: "k2",
       GSC_REFRESH_TOKEN: "k3",
@@ -438,7 +459,7 @@ export default defineConfig({
   out: "./src/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgres://seo_forge:seo_forge@localhost:5433/seo_forge",
+    url: process.env.DATABASE_URL ?? "postgres://seo_forge:seo_forge@localhost:5432/seo_forge",
   },
 });
 ```
@@ -628,7 +649,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
-const url = process.env.DATABASE_URL ?? "postgres://seo_forge:seo_forge@localhost:5433/seo_forge";
+const url = process.env.DATABASE_URL ?? "postgres://seo_forge:seo_forge@localhost:5432/seo_forge";
 const sql = postgres(url, { max: 1 });
 const db = drizzle(sql);
 
@@ -671,7 +692,7 @@ git commit -m "feat(shared): add drizzle schema for sites, jobs, content_index, 
 ```typescript
 import { createDb, tables } from "../index";
 
-const url = process.env.DATABASE_URL ?? "postgres://seo_forge:seo_forge@localhost:5433/seo_forge";
+const url = process.env.DATABASE_URL ?? "postgres://seo_forge:seo_forge@localhost:5432/seo_forge";
 const { db, close } = createDb(url);
 
 await db
@@ -715,7 +736,7 @@ Expected: `Seeded mca-guide site.`
 - [ ] **Step 4: Verify in DB**
 
 ```bash
-docker compose exec postgres psql -U seo_forge -d seo_forge -c "SELECT id, name, domain FROM sites;"
+/Applications/Postgres.app/Contents/Versions/latest/bin/psql -h localhost -p 5432 -U postgres -d seo_forge -c "SELECT id, name, domain FROM sites;"
 ```
 
 Expected: one row with `mca-guide | The MCA Guide | themcaguide.com`.
@@ -1049,7 +1070,7 @@ import { createDb, tables } from "@seo-forge/shared";
 import { sql } from "drizzle-orm";
 import { ContentIndexRepo } from "./repo";
 
-const url = process.env.DATABASE_URL ?? "postgres://seo_forge:seo_forge@localhost:5433/seo_forge";
+const url = process.env.DATABASE_URL ?? "postgres://seo_forge:seo_forge@localhost:5432/seo_forge";
 const { db, close } = createDb(url);
 const repo = new ContentIndexRepo(db);
 
@@ -1340,7 +1361,7 @@ Expected: console output showing pages indexed; final `Done: { inserted: ~140, s
 - [ ] **Step 4: Verify in DB**
 
 ```bash
-docker compose exec postgres psql -U seo_forge -d seo_forge -c "SELECT COUNT(*) FROM content_index WHERE site_id = 'mca-guide';"
+/Applications/Postgres.app/Contents/Versions/latest/bin/psql -h localhost -p 5432 -U postgres -d seo_forge -c "SELECT COUNT(*) FROM content_index WHERE site_id = 'mca-guide';"
 ```
 
 Expected: count matches inserted total.
@@ -2730,7 +2751,7 @@ This is the Phase 1A exit gate. Bar runs the CLI; an article appears live.
 
 Verify each:
 - [ ] `claude --version` succeeds and shows you're logged in
-- [ ] Postgres is running (`docker compose ps`)
+- [ ] Postgres.app is running (status indicator green; `pg_isready -h localhost -p 5432` shows accepting connections)
 - [ ] `sites` row for `mca-guide` has correct `repoUrl` and `contentDir`
 - [ ] `content_index` has rows for `mca-guide` (from Task 10)
 - [ ] `.env` has all required keys (DATABASE_URL, VOYAGE_API_KEY, AHREFS_API_KEY, GSC_REFRESH_TOKEN, GSC_CLIENT_ID, GSC_CLIENT_SECRET, ANTHROPIC_API_KEY, GH_PAT_MCA_GUIDE)
@@ -2766,7 +2787,7 @@ Expected: article renders with frontmatter, lede, Quick Facts box, body, interna
 - [ ] **Step 5: Verify content_index was updated**
 
 ```bash
-docker compose exec postgres psql -U seo_forge -d seo_forge -c "SELECT site_id, url, title FROM content_index WHERE site_id = 'mca-guide' ORDER BY last_indexed DESC LIMIT 3;"
+/Applications/Postgres.app/Contents/Versions/latest/bin/psql -h localhost -p 5432 -U postgres -d seo_forge -c "SELECT site_id, url, title FROM content_index WHERE site_id = 'mca-guide' ORDER BY last_indexed DESC LIMIT 3;"
 ```
 
 Expected: the new article is the most recent row.
