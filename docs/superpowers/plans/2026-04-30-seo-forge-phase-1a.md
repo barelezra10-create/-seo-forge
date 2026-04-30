@@ -505,6 +505,7 @@ Expected: schema.ts not found.
 
 ```typescript
 import {
+  bigint,
   bigserial,
   boolean,
   index,
@@ -554,7 +555,7 @@ export const jobs = pgTable(
     payload: jsonb("payload").notNull().default({}),
     result: jsonb("result"),
     error: text("error"),
-    blockedBy: bigserial("blocked_by", { mode: "number" }),
+    blockedBy: bigint("blocked_by", { mode: "number" }),
     runAfter: timestamp("run_after", { withTimezone: true }),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }),
