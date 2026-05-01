@@ -1543,9 +1543,9 @@ const KEY = process.env.AHREFS_API_KEY;
 const SKIP = !KEY;
 
 describe("fetchKeywordIdeas", () => {
-  it.skipIf(SKIP)("returns ideas for a domain", async () => {
+  it.skipIf(SKIP)("returns keyword ideas for a seed", async () => {
     const ideas = await fetchKeywordIdeas({
-      domain: "themcaguide.com",
+      seed: "merchant cash advance",
       country: "us",
       limit: 25,
       maxKd: 30,
@@ -1572,12 +1572,12 @@ pnpm --filter @seo-forge/worker test src/data/ahrefs
 export type AhrefsKeywordIdea = {
   keyword: string;
   volume: number;
-  kd: number;
+  kd: number | null;
   cpc: number | null;
 };
 
 export type FetchKeywordIdeasOpts = {
-  domain: string;
+  seed: string;
   country: string;
   limit: number;
   maxKd: number;
@@ -1587,10 +1587,13 @@ export type FetchKeywordIdeasOpts = {
 export async function fetchKeywordIdeas(o: FetchKeywordIdeasOpts): Promise<AhrefsKeywordIdea[]> {
   const url = new URL("https://api.ahrefs.com/v3/keywords-explorer/matching-terms");
   url.searchParams.set("country", o.country);
-  url.searchParams.set("target", o.domain);
+  url.searchParams.set("keywords", o.seed);
   url.searchParams.set("select", "keyword,volume,difficulty,cpc");
   url.searchParams.set("limit", String(o.limit));
-  url.searchParams.set("where", JSON.stringify({ field: "difficulty", operator: "lte", value: o.maxKd }));
+  url.searchParams.set(
+    "where",
+    JSON.stringify({ field: "difficulty", is: ["lte", o.maxKd] }),
+  );
 
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${o.apiKey}` },
@@ -1599,16 +1602,21 @@ export async function fetchKeywordIdeas(o: FetchKeywordIdeasOpts): Promise<Ahref
     throw new Error(`Ahrefs API ${res.status}: ${await res.text()}`);
   }
   const json = (await res.json()) as {
-    keywords: Array<{ keyword: string; volume: number; difficulty: number; cpc?: number }>;
+    keywords: Array<{ keyword: string; volume: number; difficulty: number | null; cpc: number | null }>;
   };
   return json.keywords.map((k) => ({
     keyword: k.keyword,
     volume: k.volume,
     kd: k.difficulty,
-    cpc: k.cpc ?? null,
+    cpc: k.cpc,
   }));
 }
 ```
+
+> **API contract notes:**
+> - The endpoint takes a seed *keyword* (param `keywords`), not a *domain* / `target`. Param renamed to `seed`.
+> - The `where` clause uses `{field, is: [op, value]}` shape (not `{field, operator, value}`).
+> - Both `difficulty` and `cpc` can come back `null` from Ahrefs — the parser preserves null rather than coercing to 0.
 
 - [ ] **Step 4: Run, expect pass**
 
@@ -2246,6 +2254,10 @@ export function selectKeyword(input: SelectInput): Candidate | null {
 export type KeywordResearchInput = {
   siteId: string;
   domain: string;
+  // Ahrefs matching-terms takes a seed *keyword*, not a domain. Caller supplies it.
+  // TODO(task-16): seed must come from site config (e.g., `sites.seedKeywords` column).
+  // For now the pipeline passes a hardcoded seed per site.
+  seed: string;
   coveredSlugs: Set<string>;
   ahrefsKey: string;
   gscRefreshToken: string;
@@ -2266,7 +2278,7 @@ export type KeywordBrief = {
 export async function gatherCandidates(i: KeywordResearchInput): Promise<Candidate[]> {
   const [ideas, striking] = await Promise.all([
     fetchKeywordIdeas({
-      domain: i.domain,
+      seed: i.seed,
       country: "us",
       limit: 50,
       maxKd: 30,
@@ -2288,7 +2300,9 @@ export async function gatherCandidates(i: KeywordResearchInput): Promise<Candida
       keyword: k.keyword,
       source: "ahrefs",
       volume: k.volume,
-      kd: k.kd,
+      // Ahrefs returns null kd for many keywords (no measured difficulty).
+      // Treat unknown as 0 for scoring purposes — they're typically zero-competition tail.
+      kd: k.kd ?? 0,
       position: null,
     })),
     ...striking.map<Candidate>((q) => ({
@@ -2584,9 +2598,12 @@ export async function runPipeline(opts: { siteId: string }): Promise<PipelineRes
     const coveredSlugs = new Set(indexRows.map((r) => r.slug));
 
     // 2. Keyword research
+    // TODO(task-16): seed must come from site config (e.g., a `sites.seedKeywords` column).
+    // For now we hardcode a seed per site adapter — adapter.defaultSeed or similar.
     const candidates = await gatherCandidates({
       siteId: site.id,
       domain: site.domain,
+      seed: adapter.defaultSeed, // adapter exposes a default seed keyword for Ahrefs matching-terms
       coveredSlugs,
       ahrefsKey: env.AHREFS_API_KEY,
       gscRefreshToken: env.GSC_REFRESH_TOKEN,
