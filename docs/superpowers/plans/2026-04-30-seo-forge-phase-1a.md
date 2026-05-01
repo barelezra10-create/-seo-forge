@@ -1831,6 +1831,8 @@ export interface SiteAdapter {
   siteId: string;
   contentDir: string;
   fileFormat: "mdx" | "md";
+  /** Seed keyword for Ahrefs `matching-terms` lookups. Identifies the site's topic. */
+  defaultSeed: string;
   buildSlug(brief: ArticleBrief): string;
   buildPath(slug: string): string;
   renderFile(input: RenderInput): { path: string; content: string; slug: string };
@@ -1846,6 +1848,13 @@ import { describe, it, expect } from "vitest";
 import { mcaGuideAdapter } from "./adapter";
 
 describe("mcaGuideAdapter", () => {
+  it("declares siteId, contentDir, fileFormat, defaultSeed", () => {
+    expect(mcaGuideAdapter.siteId).toBe("mca-guide");
+    expect(mcaGuideAdapter.contentDir).toBe("content/articles");
+    expect(mcaGuideAdapter.fileFormat).toBe("mdx");
+    expect(mcaGuideAdapter.defaultSeed.length).toBeGreaterThan(0);
+  });
+
   it("builds slug from keyword", () => {
     expect(mcaGuideAdapter.buildSlug({ targetKeyword: "What is an MCA loan", intent: "info", outline: [], audience: "" }))
       .toBe("what-is-an-mca-loan");
@@ -1871,6 +1880,16 @@ describe("mcaGuideAdapter", () => {
     expect(out.content).toContain("Quick Facts");
     expect(out.content).toContain("Personal Loans 101");
     expect(out.content).toContain("application/ld+json");
+  });
+
+  it("renderFile content has no em dash", () => {
+    const out = mcaGuideAdapter.renderFile({
+      brief: { targetKeyword: "test", intent: "info", outline: [], audience: "" },
+      geo: { ledeAnswer: "An MCA is a tool, not a loan.", quickFacts: ["Fact 1"] },
+      body: "## A section\n\nBody here.",
+      sisterLinks: [],
+    });
+    expect(out.content).not.toContain("—"); // em dash
   });
 });
 ```
@@ -1907,6 +1926,7 @@ export const mcaGuideAdapter: SiteAdapter = {
   siteId: "mca-guide",
   contentDir: "content/articles",
   fileFormat: "mdx",
+  defaultSeed: "merchant cash advance",
 
   buildSlug(brief) {
     return slugify(brief.targetKeyword);
@@ -1961,13 +1981,13 @@ export const mcaGuideAdapter: SiteAdapter = {
 pnpm --filter @seo-forge/worker test src/sites
 ```
 
-Expected: 3 passing.
+Expected: 5 passing.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add worker/src/sites/
-git commit -m "feat(worker): add SiteAdapter interface and MCA Guide adapter"
+git commit -m "feat(worker): add SiteAdapter interface (with defaultSeed) and MCA Guide adapter"
 ```
 
 ---
