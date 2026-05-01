@@ -9,8 +9,27 @@ export function parseSitemap(xml: string): SitemapEntry[] {
   });
 }
 
+export function parseSitemapIndex(xml: string): string[] {
+  const sitemapBlocks = xml.match(/<sitemap>[\s\S]*?<\/sitemap>/g) ?? [];
+  return sitemapBlocks.map(
+    (block) => block.match(/<loc>([^<]+)<\/loc>/)?.[1]?.trim() ?? "",
+  ).filter(Boolean);
+}
+
+export function isSitemapIndex(xml: string): boolean {
+  return /<sitemapindex[\s>]/.test(xml);
+}
+
 export async function fetchAndParseSitemap(sitemapUrl: string): Promise<SitemapEntry[]> {
   const res = await fetch(sitemapUrl, { headers: { "User-Agent": "seo-forge/0.0.1" } });
   if (!res.ok) throw new Error(`Sitemap fetch failed: ${res.status} ${sitemapUrl}`);
-  return parseSitemap(await res.text());
+  const xml = await res.text();
+
+  if (isSitemapIndex(xml)) {
+    const childUrls = parseSitemapIndex(xml);
+    const childResults = await Promise.all(childUrls.map((u) => fetchAndParseSitemap(u)));
+    return childResults.flat();
+  }
+
+  return parseSitemap(xml);
 }
