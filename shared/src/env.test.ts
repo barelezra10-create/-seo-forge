@@ -10,6 +10,8 @@ describe("parseEnv", () => {
       GSC_REFRESH_TOKEN: "k3",
       ANTHROPIC_API_KEY: "k4",
       GH_PAT_MCA_GUIDE: "k5",
+      GSC_CLIENT_ID: "k6",
+      GSC_CLIENT_SECRET: "k7",
       WORKSPACE_REPOS_DIR: "./workspace/repos",
     });
     expect(env.DATABASE_URL).toBe("postgres://u:p@localhost:5432/db");
@@ -28,6 +30,8 @@ describe("parseEnv", () => {
       GSC_REFRESH_TOKEN: "k3",
       ANTHROPIC_API_KEY: "k4",
       GH_PAT_MCA_GUIDE: "k5",
+      GSC_CLIENT_ID: "k6",
+      GSC_CLIENT_SECRET: "k7",
     });
     expect(env.WORKSPACE_REPOS_DIR).toBe("./workspace/repos");
   });
@@ -41,6 +45,8 @@ describe("parseEnv", () => {
         GSC_REFRESH_TOKEN: "k3",
         ANTHROPIC_API_KEY: "k4",
         GH_PAT_MCA_GUIDE: "k5",
+        GSC_CLIENT_ID: "k6",
+        GSC_CLIENT_SECRET: "k7",
       }),
     ).toThrow();
   });
