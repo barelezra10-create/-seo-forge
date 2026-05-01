@@ -2237,6 +2237,9 @@ describe("selectKeyword", () => {
 ```typescript
 import { fetchKeywordIdeas } from "../data/ahrefs.js";
 import { fetchStrikingDistanceQueries } from "../data/gsc.js";
+import type { KeywordBrief } from "./write-article.prompt.js";
+
+export type { KeywordBrief };
 
 export type Candidate = {
   keyword: string;
@@ -2261,7 +2264,7 @@ function score(c: Candidate): number {
     // striking distance: closer to position 10 + impressions = higher
     return c.volume + (25 - (c.position ?? 25)) * 50;
   }
-  // ahrefs: volume / (kd + 1) — favor traffic per difficulty
+  // ahrefs: volume / (kd + 1). Favor traffic per difficulty.
   return c.volume / (c.kd + 1);
 }
 
@@ -2283,16 +2286,6 @@ export type KeywordResearchInput = {
   gscRefreshToken: string;
   gscClientId: string;
   gscClientSecret: string;
-};
-
-export type KeywordBrief = {
-  targetKeyword: string;
-  intent: string;
-  outline: string[];
-  audience: string;
-  source: "ahrefs" | "gsc";
-  volume: number;
-  kd: number;
 };
 
 export async function gatherCandidates(i: KeywordResearchInput): Promise<Candidate[]> {
@@ -2382,7 +2375,15 @@ The article writer builds the prompt for Claude Code, runs it, parses the struct
 - [ ] **Step 1: Implement the prompt template `worker/src/jobs/write-article.prompt.ts`**
 
 ```typescript
-import type { KeywordBrief } from "./keyword-research.js";
+export type KeywordBrief = {
+  targetKeyword: string;
+  intent: string;
+  outline: string[];
+  audience: string;
+  source: "ahrefs" | "gsc";
+  volume: number;
+  kd: number;
+};
 
 export type SisterLink = { url: string; title: string };
 
@@ -2398,7 +2399,7 @@ export function buildPrompt(opts: {
       ? opts.sisterLinks
           .map((l, i) => `${i + 1}. ${l.title} - ${l.url}`)
           .join("\n")
-      : "(none — do not invent any external links)";
+      : "(none. do not invent any external links)";
 
   return `You are writing a single article for ${opts.siteName} (${opts.domain}).
 
@@ -2413,16 +2414,16 @@ ${opts.brief.outline.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 Internal links to include if topically relevant (max ${opts.sisterLinks.length}):
 ${sisterLinksBlock}
 
-Output a single JSON object — no prose before or after — with these exact keys:
+Output a single JSON object. No prose before or after. Use these exact keys:
 
 {
   "ledeAnswer": "1-2 sentence direct answer to the target keyword query, factual, quotable",
   "quickFacts": ["4-6 short factual bullets, each with a number, date, or named source"],
-  "body": "Full article body in markdown. Use H2 (##) for sections. 1200-2000 words. Insert the internal links inline where topically relevant — do not force them. Do not include a top-level H1. Do not include a frontmatter block. Do not use em dashes (—); use periods or commas instead."
+  "body": "Full article body in markdown. Use H2 (##) for sections. 1200-2000 words. Insert the internal links inline where topically relevant. Do not force them. Do not include a top-level H1. Do not include a frontmatter block. Do not use em dashes. Use periods or commas instead."
 }
 
 Rules:
-- No em dashes (—) anywhere. None.
+- No em dashes anywhere. None.
 - Cite sources by name when stating a stat (e.g., "according to the SBA...").
 - Use real, plausible numbers. If you do not know an exact number, give a defensible range and label it as such.
 - The internal links above are real URLs. Use them inline as markdown links if the topic fits naturally.
@@ -2467,8 +2468,9 @@ describe("parseArticleResponse", () => {
   });
 
   it("rejects content with em dashes", () => {
+    const emDash = String.fromCharCode(0x2014);
     const json = JSON.stringify({
-      ledeAnswer: "An MCA is a tool — not a loan.",
+      ledeAnswer: `An MCA is a tool ${emDash} not a loan.`,
       quickFacts: ["a"],
       body: "b",
     });
@@ -2483,8 +2485,7 @@ describe("parseArticleResponse", () => {
 
 ```typescript
 import { runClaudeOneShot } from "../claude/session.js";
-import { buildPrompt, type SisterLink } from "./write-article.prompt.js";
-import type { KeywordBrief } from "./keyword-research.js";
+import { buildPrompt, type SisterLink, type KeywordBrief } from "./write-article.prompt.js";
 
 export type ArticleResponse = {
   ledeAnswer: string;
@@ -2514,7 +2515,8 @@ export function parseArticleResponse(raw: string): ArticleResponse {
   }
   const r = j as ArticleResponse;
   const combined = `${r.ledeAnswer}\n${r.quickFacts.join("\n")}\n${r.body}`;
-  if (combined.includes("—")) {
+  // U+2014 is the em dash. Reject any presence in Claude's output.
+  if (combined.includes(String.fromCharCode(0x2014))) {
     throw new Error(`Article response contains em dash characters; rewrite required.`);
   }
   return r;
