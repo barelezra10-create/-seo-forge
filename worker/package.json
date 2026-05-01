@@ -5,6 +5,7 @@
   "main": "./src/cli.ts",
   "scripts": {
     "cli": "tsx src/cli.ts",
+    "backfill": "tsx src/content-index/backfill.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
