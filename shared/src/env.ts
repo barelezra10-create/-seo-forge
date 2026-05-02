@@ -10,6 +10,8 @@ export const EnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1),
   GH_PAT_MCA_GUIDE: z.string().min(1),
   WORKSPACE_REPOS_DIR: z.string().min(1).default("./workspace/repos"),
+  DASHBOARD_PASSWORD: z.string().min(8),
+  DASHBOARD_SESSION_SECRET: z.string().min(32),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

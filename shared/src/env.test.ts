@@ -13,6 +13,8 @@ describe("parseEnv", () => {
       GSC_CLIENT_ID: "k6",
       GSC_CLIENT_SECRET: "k7",
       WORKSPACE_REPOS_DIR: "./workspace/repos",
+      DASHBOARD_PASSWORD: "k8value!",
+      DASHBOARD_SESSION_SECRET: "k9".repeat(16) + "min32",
     });
     expect(env.DATABASE_URL).toBe("postgres://u:p@localhost:5432/db");
     expect(env.VOYAGE_API_KEY).toBe("k1");
@@ -32,6 +34,8 @@ describe("parseEnv", () => {
       GH_PAT_MCA_GUIDE: "k5",
       GSC_CLIENT_ID: "k6",
       GSC_CLIENT_SECRET: "k7",
+      DASHBOARD_PASSWORD: "k8value!",
+      DASHBOARD_SESSION_SECRET: "k9".repeat(16) + "min32",
     });
     expect(env.WORKSPACE_REPOS_DIR).toBe("./workspace/repos");
   });
@@ -47,6 +51,8 @@ describe("parseEnv", () => {
         GH_PAT_MCA_GUIDE: "k5",
         GSC_CLIENT_ID: "k6",
         GSC_CLIENT_SECRET: "k7",
+        DASHBOARD_PASSWORD: "k8value!",
+        DASHBOARD_SESSION_SECRET: "k9".repeat(16) + "min32",
       }),
     ).toThrow();
   });
