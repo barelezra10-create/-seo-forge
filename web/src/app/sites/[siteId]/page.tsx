@@ -5,6 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getSite } from "@/lib/queries/sites";
 import { getRecentArticles, getArticleCountThisMonth } from "@/lib/queries/articles";
+import { getLatestGscSnapshot, getLatestAhrefsSnapshot } from "@/lib/queries/analytics";
+import { GscQueriesTable } from "@/components/analytics/GscQueriesTable";
+import { AhrefsKeywordsTable } from "@/components/analytics/AhrefsKeywordsTable";
+import { BacklinksList } from "@/components/analytics/BacklinksList";
 
 export default async function SitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
@@ -14,6 +18,11 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
   const [articles, monthlyCount] = await Promise.all([
     getRecentArticles(siteId, 20),
     getArticleCountThisMonth(siteId),
+  ]);
+
+  const [gsc, ahrefs] = await Promise.all([
+    getLatestGscSnapshot(siteId),
+    getLatestAhrefsSnapshot(siteId),
   ]);
 
   return (
@@ -39,29 +48,29 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
         }
       />
       <main className="p-6 space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-zinc-500 mb-1">Domain</p>
-              <a
-                href={`https://${site.domain}`}
-                target="_blank"
-                className="font-medium text-blue-600 hover:underline"
-              >
-                {site.domain}
-              </a>
+              <p className="text-sm text-zinc-500 mb-1">Clicks 28d</p>
+              <p className="text-3xl font-bold">{gsc?.totalClicks ?? 0}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-zinc-500 mb-1">Impressions 28d</p>
+              <p className="text-3xl font-bold">{gsc?.totalImpressions ?? 0}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-zinc-500 mb-1">Domain Rating</p>
+              <p className="text-3xl font-bold">{ahrefs ? ahrefs.domainRating.toFixed(1) : "-"}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
               <p className="text-sm text-zinc-500 mb-1">Articles this month</p>
               <p className="text-3xl font-bold">{monthlyCount}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-zinc-500 mb-1">Auto-publish</p>
-              <p className="font-medium">{site.autoPublish ? "On" : "Off"}</p>
             </CardContent>
           </Card>
         </div>
@@ -96,6 +105,24 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
                 <li className="py-4 text-center text-zinc-500 text-sm">No articles yet.</li>
               )}
             </ul>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardContent className="pt-6">
+              <GscQueriesTable queries={gsc?.topQueries ?? []} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <AhrefsKeywordsTable keywords={ahrefs?.topKeywords ?? []} />
+            </CardContent>
+          </Card>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <BacklinksList backlinks={ahrefs?.recentBacklinks ?? []} />
           </CardContent>
         </Card>
       </main>
