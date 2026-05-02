@@ -136,6 +136,13 @@ export async function runPipeline(opts: { siteId: string }): Promise<PipelineRes
       firstParagraph: article.ledeAnswer,
       topicEmbedding: newEmbed,
       publishedAt: new Date(),
+      claudeTranscript: {
+        prompt: article.prompt,
+        rawResponse: article.rawResponse,
+        durationMs: article.durationMs,
+        keyword: brief.targetKeyword,
+        sisterLinks: sisterHits.map((h) => h.url),
+      },
     });
 
     return {

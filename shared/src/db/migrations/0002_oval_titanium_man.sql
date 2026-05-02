@@ -1,0 +1,1 @@
+ALTER TABLE "content_index" ADD COLUMN "claude_transcript" jsonb;

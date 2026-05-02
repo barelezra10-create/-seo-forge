@@ -90,3 +90,32 @@ export async function searchArticles(opts: ArticleSearchOpts = {}): Promise<Arti
     .limit(limit)
     .offset(offset);
 }
+
+export type ArticleDetail = ArticleRow & {
+  firstParagraph: string | null;
+  claudeTranscript: {
+    prompt?: string;
+    rawResponse?: string;
+    durationMs?: number;
+    keyword?: string;
+    sisterLinks?: string[];
+  } | null;
+};
+
+export async function getArticleBySlug(siteId: string, slug: string): Promise<ArticleDetail | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      id: tables.contentIndex.id,
+      siteId: tables.contentIndex.siteId,
+      url: tables.contentIndex.url,
+      slug: tables.contentIndex.slug,
+      title: tables.contentIndex.title,
+      publishedAt: tables.contentIndex.publishedAt,
+      firstParagraph: tables.contentIndex.firstParagraph,
+      claudeTranscript: tables.contentIndex.claudeTranscript,
+    })
+    .from(tables.contentIndex)
+    .where(and(eq(tables.contentIndex.siteId, siteId), eq(tables.contentIndex.slug, slug)));
+  return (row as ArticleDetail) ?? null;
+}

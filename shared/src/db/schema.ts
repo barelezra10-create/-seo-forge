@@ -80,6 +80,7 @@ export const contentIndex = pgTable(
     h1: text("h1"),
     firstParagraph: text("first_paragraph"),
     topicEmbedding: vector("topic_embedding", { dimensions: 1024 }),
+    claudeTranscript: jsonb("claude_transcript"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     lastIndexed: timestamp("last_indexed", { withTimezone: true }).notNull().defaultNow(),
   },

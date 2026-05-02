@@ -45,7 +45,13 @@ export type WriteArticleInput = {
   timeoutMs?: number;
 };
 
-export async function runWriteArticle(i: WriteArticleInput): Promise<ArticleResponse> {
+export type WriteArticleResult = ArticleResponse & {
+  prompt: string;
+  rawResponse: string;
+  durationMs: number;
+};
+
+export async function runWriteArticle(i: WriteArticleInput): Promise<WriteArticleResult> {
   const prompt = buildPrompt({
     brief: i.brief,
     sisterLinks: i.sisterLinks,
@@ -60,5 +66,6 @@ export async function runWriteArticle(i: WriteArticleInput): Promise<ArticleResp
   if (result.exitCode !== 0) {
     throw new Error(`claude exited ${result.exitCode}: ${result.stderr.slice(0, 500)}`);
   }
-  return parseArticleResponse(result.text);
+  const parsed = parseArticleResponse(result.text);
+  return { ...parsed, prompt, rawResponse: result.text, durationMs: result.durationMs };
 }

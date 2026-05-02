@@ -10,6 +10,7 @@ export type ContentIndexRow = {
   firstParagraph: string;
   topicEmbedding: number[];
   publishedAt: Date;
+  claudeTranscript?: unknown;
 };
 
 export type SimilaritySearch = {
@@ -32,17 +33,22 @@ export class ContentIndexRepo {
 
   async upsert(row: ContentIndexRow): Promise<void> {
     const vec = `[${row.topicEmbedding.join(",")}]`;
+    const transcript =
+      row.claudeTranscript !== undefined && row.claudeTranscript !== null
+        ? sql`${JSON.stringify(row.claudeTranscript)}::jsonb`
+        : sql`NULL::jsonb`;
     await this.db.execute(sql`
       INSERT INTO content_index
-        (site_id, url, slug, title, h1, first_paragraph, topic_embedding, published_at, last_indexed)
+        (site_id, url, slug, title, h1, first_paragraph, topic_embedding, published_at, last_indexed, claude_transcript)
       VALUES
         (${row.siteId}, ${row.url}, ${row.slug}, ${row.title}, ${row.h1},
-         ${row.firstParagraph}, ${vec}::vector, ${row.publishedAt.toISOString()}, NOW())
+         ${row.firstParagraph}, ${vec}::vector, ${row.publishedAt.toISOString()}, NOW(), ${transcript})
       ON CONFLICT (url) DO UPDATE SET
         title = EXCLUDED.title,
         h1 = EXCLUDED.h1,
         first_paragraph = EXCLUDED.first_paragraph,
         topic_embedding = EXCLUDED.topic_embedding,
+        claude_transcript = EXCLUDED.claude_transcript,
         last_indexed = NOW()
     `);
   }
