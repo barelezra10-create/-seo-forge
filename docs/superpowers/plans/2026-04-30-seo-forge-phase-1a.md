@@ -1833,6 +1833,8 @@ export interface SiteAdapter {
   fileFormat: "mdx" | "md";
   /** Seed keyword for Ahrefs `matching-terms` lookups. Identifies the site's topic. */
   defaultSeed: string;
+  /** URL path prefix between domain and slug (e.g., "articles" for /articles/<slug>). Empty string for root-level pages. */
+  urlPathPrefix: string;
   buildSlug(brief: ArticleBrief): string;
   buildPath(slug: string): string;
   renderFile(input: RenderInput): { path: string; content: string; slug: string };
@@ -1853,6 +1855,7 @@ describe("mcaGuideAdapter", () => {
     expect(mcaGuideAdapter.contentDir).toBe("content/articles");
     expect(mcaGuideAdapter.fileFormat).toBe("mdx");
     expect(mcaGuideAdapter.defaultSeed.length).toBeGreaterThan(0);
+    expect(mcaGuideAdapter.urlPathPrefix).toBe("articles");
   });
 
   it("builds slug from keyword", () => {
@@ -1927,6 +1930,7 @@ export const mcaGuideAdapter: SiteAdapter = {
   contentDir: "content/articles",
   fileFormat: "mdx",
   defaultSeed: "merchant cash advance",
+  urlPathPrefix: "articles",
 
   buildSlug(brief) {
     return slugify(brief.targetKeyword);
@@ -2605,6 +2609,14 @@ export type PipelineResult = {
   targetKeyword: string;
 };
 
+function buildAuthenticatedRepoUrl(sshUrl: string, pat: string | undefined): string {
+  if (!pat) return sshUrl;
+  // Match git@github.com:owner/repo.git OR git@github.com-alias:owner/repo.git
+  const m = sshUrl.match(/^git@github\.com[^:]*:(.+?)\.git$/);
+  if (!m) return sshUrl;
+  return `https://x-access-token:${pat}@github.com/${m[1]}.git`;
+}
+
 export async function runPipeline(opts: { siteId: string }): Promise<PipelineResult> {
   const env = parseEnv(process.env);
   const adapter = ADAPTERS[opts.siteId];
@@ -2669,15 +2681,14 @@ export async function runPipeline(opts: { siteId: string }): Promise<PipelineRes
       sisterLinks: sisterHits.map((h) => ({ url: h.url, title: h.title })),
     });
 
-    // 6. Publish via git
-    const pat = process.env[`GH_PAT_${opts.siteId.replace(/-/g, "_").toUpperCase()}`];
-    const repoUrl = pat
-      ? site.repoUrl.replace("git@github.com-barelezra10:", `https://${pat}@github.com/`).replace(":", "/").replace(".git", ".git")
-      : site.repoUrl;
+    // 6. Publish via git (HTTPS + PAT)
+    const patEnvKey = `GH_PAT_${opts.siteId.replace(/-/g, "_").toUpperCase()}`;
+    const pat = process.env[patEnvKey];
+    const repoUrl = buildAuthenticatedRepoUrl(site.repoUrl, pat);
     const publisher = new GitPublisher({ workspaceDir: env.WORKSPACE_REPOS_DIR });
     const publishResult = await publisher.publish({
       siteId: site.id,
-      repoUrl: site.repoUrl, // use SSH alias; PAT path only kicks in for HTTPS-required envs (Railway)
+      repoUrl,
       branch: site.branch,
       relativeFilePath: rendered.path,
       fileContent: rendered.content,
@@ -2688,7 +2699,10 @@ export async function runPipeline(opts: { siteId: string }): Promise<PipelineRes
     console.log(`[pipeline] published ${rendered.path} as commit ${publishResult.commitSha}`);
 
     // 7. Update content_index for the new article
-    const articleUrl = `https://${site.domain}/${rendered.slug}`;
+    const urlPath = adapter.urlPathPrefix
+      ? `${adapter.urlPathPrefix}/${rendered.slug}`
+      : rendered.slug;
+    const articleUrl = `https://${site.domain}/${urlPath}`;
     const newEmbed = await embedText(
       `${brief.targetKeyword}\n${article.ledeAnswer}\n${article.body.slice(0, 800)}`,
       env.VOYAGE_API_KEY,
