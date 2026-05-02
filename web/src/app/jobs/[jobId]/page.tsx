@@ -73,6 +73,23 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
           </Card>
         )}
 
+        {(() => {
+          const log = (job.payload as { log?: string[] }).log;
+          if (!log || log.length === 0) return null;
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle>Log</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="bg-zinc-50 p-3 rounded text-xs whitespace-pre-wrap font-mono">
+                  {log.join("\n")}
+                </pre>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         <Card>
           <CardHeader>
             <CardTitle>Payload</CardTitle>

@@ -32,7 +32,7 @@ export async function processNextPublishJob(): Promise<ProcessResult | null> {
   await appendJobLog(job.id, `[${new Date().toISOString()}] starting publish for ${job.payload.siteId}`);
 
   try {
-    const result = await runPipeline({ siteId: job.payload.siteId });
+    const result = await runPipeline({ siteId: job.payload.siteId, jobId: job.id });
     await appendJobLog(
       job.id,
       `[${new Date().toISOString()}] published: ${(result as { url?: string }).url ?? "?"}`,
