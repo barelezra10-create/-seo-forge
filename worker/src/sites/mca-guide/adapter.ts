@@ -26,6 +26,7 @@ export const mcaGuideAdapter: SiteAdapter = {
   contentDir: "content/articles",
   fileFormat: "mdx",
   defaultSeed: "merchant cash advance",
+  urlPathPrefix: "articles",
 
   buildSlug(brief) {
     return slugify(brief.targetKeyword);

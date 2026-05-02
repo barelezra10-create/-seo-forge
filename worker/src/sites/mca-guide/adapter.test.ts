@@ -7,6 +7,7 @@ describe("mcaGuideAdapter", () => {
     expect(mcaGuideAdapter.contentDir).toBe("content/articles");
     expect(mcaGuideAdapter.fileFormat).toBe("mdx");
     expect(mcaGuideAdapter.defaultSeed.length).toBeGreaterThan(0);
+    expect(mcaGuideAdapter.urlPathPrefix).toBe("articles");
   });
 
   it("builds slug from keyword", () => {
