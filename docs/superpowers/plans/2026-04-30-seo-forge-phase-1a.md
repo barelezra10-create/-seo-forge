@@ -1681,7 +1681,7 @@ describe("gsc", () => {
 
   it.skipIf(SKIP)("fetches striking-distance queries for a property", async () => {
     const queries = await fetchStrikingDistanceQueries({
-      siteUrl: "sc-domain:themcaguide.com",
+      siteUrl: "https://themcaguide.com/",
       refreshToken: process.env.GSC_REFRESH_TOKEN!,
       clientId: process.env.GSC_CLIENT_ID!,
       clientSecret: process.env.GSC_CLIENT_SECRET!,
@@ -2298,7 +2298,11 @@ export async function gatherCandidates(i: KeywordResearchInput): Promise<Candida
       apiKey: i.ahrefsKey,
     }),
     fetchStrikingDistanceQueries({
-      siteUrl: `sc-domain:${i.domain}`,
+      // URL-prefix property format works for all 6 finance-cluster sites Bar
+      // currently has access to. Future sites whose token only has
+      // `sc-domain:` access will need a per-site override — best placed on
+      // SiteAdapter alongside `defaultSeed` (Task 14/Task 16 follow-up).
+      siteUrl: `https://${i.domain}/`,
       refreshToken: i.gscRefreshToken,
       clientId: i.gscClientId,
       clientSecret: i.gscClientSecret,
