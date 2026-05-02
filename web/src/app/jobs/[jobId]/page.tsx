@@ -3,6 +3,7 @@ import Link from "next/link";
 import { TopBar } from "@/components/layout/TopBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getJob } from "@/lib/queries/jobs";
+import { JobStatusRefresher } from "./JobStatusRefresher";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-zinc-100 text-zinc-700",
@@ -31,6 +32,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
         }
       />
       <main className="p-6 space-y-6 max-w-4xl">
+        <JobStatusRefresher status={job.status} />
         <Card>
           <CardContent className="pt-6 space-y-3">
             <div className="flex items-center justify-between">
