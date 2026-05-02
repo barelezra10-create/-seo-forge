@@ -1879,10 +1879,29 @@ describe("mcaGuideAdapter", () => {
     expect(out.path).toBe("content/articles/mca-basics.mdx");
     expect(out.content).toContain("---");
     expect(out.content).toContain("title:");
+    expect(out.content).toContain("publishedAt:");
+    expect(out.content).toContain('author: "Bar Alezrah"');
     expect(out.content).toContain("An MCA is X.");
     expect(out.content).toContain("Quick Facts");
     expect(out.content).toContain("Personal Loans 101");
-    expect(out.content).toContain("application/ld+json");
+    // No inline JSON-LD: MDX 2/3 treats `{` inside <script> as a JSX
+    // expression. MCA Guide injects structured data via Next metadata.
+    expect(out.content).not.toContain("application/ld+json");
+  });
+
+  it("renderFile title-cases the target keyword", () => {
+    const out = mcaGuideAdapter.renderFile({
+      brief: {
+        targetKeyword: "merchant cash advance lawyer",
+        intent: "info",
+        outline: [],
+        audience: "",
+      },
+      geo: { ledeAnswer: "Lede.", quickFacts: ["Fact"] },
+      body: "## A\n\nBody.",
+      sisterLinks: [],
+    });
+    expect(out.content).toContain('title: "Merchant Cash Advance Lawyer"');
   });
 
   it("renderFile content has no em dash", () => {
@@ -1902,7 +1921,7 @@ describe("mcaGuideAdapter", () => {
 - [ ] **Step 4: Implement `worker/src/sites/mca-guide/adapter.ts`**
 
 ```typescript
-import type { SiteAdapter, RenderInput, ArticleBrief } from "../adapter.js";
+import type { SiteAdapter, RenderInput } from "../adapter.js";
 
 function slugify(s: string): string {
   return s
@@ -1913,16 +1932,28 @@ function slugify(s: string): string {
     .slice(0, 80);
 }
 
-function buildJsonLd(brief: ArticleBrief, lede: string): string {
-  const data = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: brief.targetKeyword,
-    description: lede,
-    author: { "@type": "Organization", name: "The MCA Guide" },
-    publisher: { "@type": "Organization", name: "The MCA Guide" },
-  };
-  return JSON.stringify(data, null, 2);
+const SMALL_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "of",
+  "in",
+  "on",
+  "for",
+  "and",
+  "or",
+  "with",
+]);
+
+function titleCase(s: string): string {
+  const words = s.trim().split(/\s+/);
+  return words
+    .map((word, i) => {
+      const lower = word.toLowerCase();
+      if (i !== 0 && SMALL_WORDS.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
 }
 
 export const mcaGuideAdapter: SiteAdapter = {
@@ -1944,14 +1975,14 @@ export const mcaGuideAdapter: SiteAdapter = {
     const slug = this.buildSlug(input.brief);
     const path = this.buildPath(slug);
     const today = new Date().toISOString().slice(0, 10);
+    const title = titleCase(input.brief.targetKeyword);
 
     const frontmatter = [
       "---",
-      `title: "${input.brief.targetKeyword.replace(/"/g, '\\"')}"`,
+      `title: "${title.replace(/"/g, '\\"')}"`,
       `description: "${input.geo.ledeAnswer.replace(/"/g, '\\"').slice(0, 160)}"`,
-      `date: ${today}`,
-      `slug: ${slug}`,
-      `targetKeyword: "${input.brief.targetKeyword.replace(/"/g, '\\"')}"`,
+      `publishedAt: "${today}"`,
+      `author: "Bar Alezrah"`,
       "---",
     ].join("\n");
 
@@ -1971,13 +2002,16 @@ export const mcaGuideAdapter: SiteAdapter = {
           "\n"
         : "";
 
-    const jsonLd = `\n<script type="application/ld+json">\n${buildJsonLd(input.brief, input.geo.ledeAnswer)}\n</script>\n`;
-
-    const content = [frontmatter, lede, quickFacts, body, sisterLinksBlock, jsonLd].join("\n");
+    // No inline JSON-LD: MDX 2/3 treats `{` inside <script> as a JSX
+    // expression, breaking the build. MCA Guide injects structured data via
+    // its Next.js metadata API, so we don't need to emit it from MDX.
+    const content = [frontmatter, lede, quickFacts, body, sisterLinksBlock].join("\n");
     return { path, content, slug };
   },
 };
 ```
+
+Frontmatter shape matches existing MCA Guide articles (e.g. `content/articles/best-mca-companies.mdx`): `title`, `description`, `publishedAt` (quoted string), `author`. We deliberately skip `slug` (derived from filename) and `targetKeyword` (not consumed by the site).
 
 - [ ] **Step 5: Run, expect pass**
 
@@ -1985,7 +2019,7 @@ export const mcaGuideAdapter: SiteAdapter = {
 pnpm --filter @seo-forge/worker test src/sites
 ```
 
-Expected: 5 passing.
+Expected: 7 passing.
 
 - [ ] **Step 6: Commit**
 
