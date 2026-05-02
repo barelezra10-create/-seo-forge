@@ -8,7 +8,8 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "cli": "pnpm --filter worker cli"
+    "cli": "pnpm --filter worker cli",
+    "start": "node index.mjs"
   },
   "engines": {
     "node": ">=20.10.0"
