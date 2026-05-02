@@ -2,6 +2,8 @@ import {
   bigint,
   bigserial,
   boolean,
+  date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -94,3 +96,76 @@ export const authStatus = pgTable("auth_status", {
   lastChecked: timestamp("last_checked", { withTimezone: true }).notNull().defaultNow(),
   errorMessage: text("error_message"),
 });
+
+export const gscSnapshot = pgTable(
+  "gsc_snapshot",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id),
+    snapshotDate: date("snapshot_date").notNull(),
+    totalClicks: integer("total_clicks").notNull().default(0),
+    totalImpressions: integer("total_impressions").notNull().default(0),
+    avgCtr: doublePrecision("avg_ctr").notNull().default(0),
+    avgPosition: doublePrecision("avg_position").notNull().default(0),
+    /** JSON: { topQueries: [...], topPages: [...], strikingDistance: [...] } */
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    siteDateIdx: uniqueIndex("gsc_snapshot_site_date_idx").on(t.siteId, t.snapshotDate),
+  }),
+);
+
+export const ahrefsSnapshot = pgTable(
+  "ahrefs_snapshot",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id),
+    snapshotDate: date("snapshot_date").notNull(),
+    domainRating: doublePrecision("domain_rating").notNull().default(0),
+    refDomains: integer("ref_domains").notNull().default(0),
+    backlinks: integer("backlinks").notNull().default(0),
+    organicKeywords: integer("organic_keywords").notNull().default(0),
+    organicTraffic: integer("organic_traffic").notNull().default(0),
+    /** JSON: { topPages: [...], topKeywords: [...], newBacklinks: [...] } */
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    siteDateIdx: uniqueIndex("ahrefs_snapshot_site_date_idx").on(t.siteId, t.snapshotDate),
+  }),
+);
+
+export const opportunityStatusEnum = pgEnum("opportunity_status", [
+  "open",
+  "acted_on",
+  "dismissed",
+  "expired",
+]);
+
+export const opportunities = pgTable(
+  "opportunities",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id),
+    /** "striking_distance" | "traffic_decline" | "content_gap" | "broken_link" */
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    status: opportunityStatusEnum("status").notNull().default("open"),
+    /** JSON: type-specific data (keyword, position, page, etc.) */
+    payload: jsonb("payload").notNull().default({}),
+    actedJobId: bigint("acted_job_id", { mode: "number" }),
+    detectedAt: timestamp("detected_at", { withTimezone: true }).notNull().defaultNow(),
+    actedAt: timestamp("acted_at", { withTimezone: true }),
+  },
+  (t) => ({
+    siteStatusIdx: index("opportunities_site_status_idx").on(t.siteId, t.status),
+  }),
+);
