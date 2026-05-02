@@ -15,7 +15,7 @@ describe("gsc", () => {
 
   it.skipIf(SKIP)("fetches striking-distance queries for a property", async () => {
     const queries = await fetchStrikingDistanceQueries({
-      siteUrl: "sc-domain:themcaguide.com",
+      siteUrl: "https://themcaguide.com/",
       refreshToken: process.env.GSC_REFRESH_TOKEN!,
       clientId: process.env.GSC_CLIENT_ID!,
       clientSecret: process.env.GSC_CLIENT_SECRET!,
