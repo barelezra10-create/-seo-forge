@@ -37,10 +37,47 @@ describe("mcaGuideAdapter", () => {
     expect(out.path).toBe("content/articles/mca-basics.mdx");
     expect(out.content).toContain("---");
     expect(out.content).toContain("title:");
+    expect(out.content).toContain("publishedAt:");
+    expect(out.content).toContain('author: "Bar Alezrah"');
     expect(out.content).toContain("An MCA is X.");
     expect(out.content).toContain("Quick Facts");
     expect(out.content).toContain("Personal Loans 101");
-    expect(out.content).toContain("application/ld+json");
+    // JSON-LD must NOT be inlined: MDX 2/3 treats `{` inside <script> as a JSX
+    // expression boundary. MCA Guide injects structured data via Next metadata.
+    expect(out.content).not.toContain("application/ld+json");
+  });
+
+  it("renderFile title-cases the target keyword", () => {
+    const out = mcaGuideAdapter.renderFile({
+      brief: {
+        targetKeyword: "merchant cash advance lawyer",
+        intent: "info",
+        outline: [],
+        audience: "",
+      },
+      geo: { ledeAnswer: "Lede.", quickFacts: ["Fact"] },
+      body: "## A\n\nBody.",
+      sisterLinks: [],
+    });
+    expect(out.content).toContain('title: "Merchant Cash Advance Lawyer"');
+  });
+
+  it("renderFile keeps small connector words lowercase in title", () => {
+    const out = mcaGuideAdapter.renderFile({
+      brief: {
+        targetKeyword: "the best mca for restaurants",
+        intent: "info",
+        outline: [],
+        audience: "",
+      },
+      geo: { ledeAnswer: "Lede.", quickFacts: ["Fact"] },
+      body: "## A\n\nBody.",
+      sisterLinks: [],
+    });
+    // First word always capitalized; "for" stays lowercase because it's a
+    // small connector. "Mca" only Title Case'd because the picker hands us
+    // lowercase keywords; that's acceptable for the simple helper.
+    expect(out.content).toContain('title: "The Best Mca for Restaurants"');
   });
 
   it("renderFile content has no em dash", () => {

@@ -1,4 +1,4 @@
-import type { SiteAdapter, RenderInput, ArticleBrief } from "../adapter.js";
+import type { SiteAdapter, RenderInput } from "../adapter.js";
 
 function slugify(s: string): string {
   return s
@@ -9,16 +9,28 @@ function slugify(s: string): string {
     .slice(0, 80);
 }
 
-function buildJsonLd(brief: ArticleBrief, lede: string): string {
-  const data = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: brief.targetKeyword,
-    description: lede,
-    author: { "@type": "Organization", name: "The MCA Guide" },
-    publisher: { "@type": "Organization", name: "The MCA Guide" },
-  };
-  return JSON.stringify(data, null, 2);
+const SMALL_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "of",
+  "in",
+  "on",
+  "for",
+  "and",
+  "or",
+  "with",
+]);
+
+function titleCase(s: string): string {
+  const words = s.trim().split(/\s+/);
+  return words
+    .map((word, i) => {
+      const lower = word.toLowerCase();
+      if (i !== 0 && SMALL_WORDS.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
 }
 
 export const mcaGuideAdapter: SiteAdapter = {
@@ -40,14 +52,14 @@ export const mcaGuideAdapter: SiteAdapter = {
     const slug = this.buildSlug(input.brief);
     const path = this.buildPath(slug);
     const today = new Date().toISOString().slice(0, 10);
+    const title = titleCase(input.brief.targetKeyword);
 
     const frontmatter = [
       "---",
-      `title: "${input.brief.targetKeyword.replace(/"/g, '\\"')}"`,
+      `title: "${title.replace(/"/g, '\\"')}"`,
       `description: "${input.geo.ledeAnswer.replace(/"/g, '\\"').slice(0, 160)}"`,
-      `date: ${today}`,
-      `slug: ${slug}`,
-      `targetKeyword: "${input.brief.targetKeyword.replace(/"/g, '\\"')}"`,
+      `publishedAt: "${today}"`,
+      `author: "Bar Alezrah"`,
       "---",
     ].join("\n");
 
@@ -67,9 +79,7 @@ export const mcaGuideAdapter: SiteAdapter = {
           "\n"
         : "";
 
-    const jsonLd = `\n<script type="application/ld+json">\n${buildJsonLd(input.brief, input.geo.ledeAnswer)}\n</script>\n`;
-
-    const content = [frontmatter, lede, quickFacts, body, sisterLinksBlock, jsonLd].join("\n");
+    const content = [frontmatter, lede, quickFacts, body, sisterLinksBlock].join("\n");
     return { path, content, slug };
   },
 };
