@@ -194,7 +194,7 @@ export const bdiAdapter: SiteAdapter = {
   contentDir: "src/data",
   fileFormat: "ts",
   defaultSeed: "business debt",
-  urlPathPrefix: "articles",
+  urlPathPrefix: "article",
 
   buildSlug(brief: ArticleBrief) {
     return slugify(brief.targetKeyword);
