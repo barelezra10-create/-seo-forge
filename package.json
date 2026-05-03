@@ -9,7 +9,7 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "cli": "pnpm --filter worker cli",
-    "start": "node index.mjs",
+    "start": "pnpm --filter @seo-forge/web exec next start --port ${PORT:-3000} --hostname 0.0.0.0",
     "dev:web": "pnpm --filter @seo-forge/web dev",
     "dev:worker": "pnpm --filter @seo-forge/worker cli"
   },
