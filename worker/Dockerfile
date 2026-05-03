@@ -22,8 +22,11 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY shared ./shared
 COPY worker ./worker
 COPY web/package.json ./web/
+COPY worker/scripts/bootstrap-claude-auth.sh /usr/local/bin/bootstrap-claude-auth.sh
+RUN chmod +x /usr/local/bin/bootstrap-claude-auth.sh
 ENV NODE_ENV=production
 # Workspace clones live here; mount a Railway Volume at this path for persistence
 ENV WORKSPACE_REPOS_DIR=/data/workspace/repos
 RUN mkdir -p /data/workspace/repos /root/.claude
+ENTRYPOINT ["/usr/local/bin/bootstrap-claude-auth.sh"]
 CMD ["pnpm", "--filter", "@seo-forge/worker", "start"]
