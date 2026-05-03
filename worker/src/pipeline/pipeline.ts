@@ -1,6 +1,7 @@
 import { createDb, parseEnv, tables } from "@seo-forge/shared";
 import { eq } from "drizzle-orm";
 import { mcaGuideAdapter } from "../sites/mca-guide/adapter.js";
+import { bdiAdapter } from "../sites/bdi/adapter.js";
 import { GitPublisher } from "../publishers/git-publisher.js";
 import { ContentIndexRepo } from "../content-index/repo.js";
 import { embedText } from "../embeddings/voyage.js";
@@ -11,6 +12,7 @@ import { appendJobLog } from "../orchestrator/publish-cron.js";
 
 const ADAPTERS: Record<string, SiteAdapter> = {
   "mca-guide": mcaGuideAdapter,
+  "bdi": bdiAdapter,
 };
 
 export type PipelineResult = {
