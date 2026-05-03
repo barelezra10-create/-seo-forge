@@ -1,4 +1,4 @@
-import type { SiteAdapter, RenderInput } from "../adapter.js";
+import type { SiteAdapter, RenderInput, RenderedFile } from "../adapter.js";
 
 function slugify(s: string): string {
   return s
@@ -48,7 +48,7 @@ export const mcaGuideAdapter: SiteAdapter = {
     return `${this.contentDir}/${slug}.${this.fileFormat}`;
   },
 
-  renderFile(input: RenderInput) {
+  async renderFile(input: RenderInput, _repoPath: string): Promise<RenderedFile[]> {
     const slug = this.buildSlug(input.brief);
     const path = this.buildPath(slug);
     const today = new Date().toISOString().slice(0, 10);
@@ -80,6 +80,6 @@ export const mcaGuideAdapter: SiteAdapter = {
         : "";
 
     const content = [frontmatter, lede, quickFacts, body, sisterLinksBlock].join("\n");
-    return { path, content, slug };
+    return [{ path, content, slug }];
   },
 };

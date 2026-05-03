@@ -101,42 +101,54 @@ export async function runPipeline(opts: { siteId: string; jobId?: number }): Pro
     if (opts.jobId)
       await appendJobLog(opts.jobId, `article written (${article.body.length} chars body)`);
 
-    // 5. Render with adapter
-    const rendered = adapter.renderFile({
-      brief,
-      geo: { ledeAnswer: article.ledeAnswer, quickFacts: article.quickFacts },
-      body: article.body,
-      sisterLinks: sisterHits.map((h) => ({ url: h.url, title: h.title })),
-    });
-
-    // 6. Publish via git (HTTPS + PAT)
+    // 5. Prepare clone so adapters that mutate existing files (BDI) can read them
     const patEnvKey = `GH_PAT_${opts.siteId.replace(/-/g, "_").toUpperCase()}`;
     const pat = process.env[patEnvKey];
     const repoUrl = buildAuthenticatedRepoUrl(site.repoUrl, pat);
     const publisher = new GitPublisher({ workspaceDir: env.WORKSPACE_REPOS_DIR });
-    const publishResult = await publisher.publish({
+    const repoPath = await publisher.prepareClone({
       siteId: site.id,
       repoUrl,
       branch: site.branch,
-      relativeFilePath: rendered.path,
-      fileContent: rendered.content,
+    });
+
+    // 6. Render with adapter (async; may read existing files from repoPath)
+    const renderedFiles = await adapter.renderFile(
+      {
+        brief,
+        geo: { ledeAnswer: article.ledeAnswer, quickFacts: article.quickFacts },
+        body: article.body,
+        sisterLinks: sisterHits.map((h) => ({ url: h.url, title: h.title })),
+      },
+      repoPath,
+    );
+    const primary = renderedFiles[0];
+    if (!primary) throw new Error("Adapter returned no files");
+
+    // 7. Publish via git (HTTPS + PAT)
+    const publishResult = await publisher.publishFiles({
+      siteId: site.id,
+      repoUrl,
+      branch: site.branch,
+      files: renderedFiles.map((f) => ({ relativePath: f.path, content: f.content })),
       commitMessage: `feat(seo-forge): publish "${brief.targetKeyword}"`,
       authorName: "SEO Forge",
       authorEmail: "seo-forge@local",
     });
+    const filePathsLog = renderedFiles.map((f) => f.path).join(", ");
     console.log(
-      `[pipeline] published ${rendered.path} as commit ${publishResult.commitSha}`,
+      `[pipeline] published ${filePathsLog} as commit ${publishResult.commitSha}`,
     );
     if (opts.jobId)
       await appendJobLog(
         opts.jobId,
-        `published ${rendered.path} as commit ${publishResult.commitSha}`,
+        `published ${filePathsLog} as commit ${publishResult.commitSha}`,
       );
 
-    // 7. Update content_index for the new article
+    // 8. Update content_index for the new article
     const urlPath = adapter.urlPathPrefix
-      ? `${adapter.urlPathPrefix}/${rendered.slug}`
-      : rendered.slug;
+      ? `${adapter.urlPathPrefix}/${primary.slug}`
+      : primary.slug;
     const articleUrl = `https://${site.domain}/${urlPath}`;
     const newEmbed = await embedText(
       `${brief.targetKeyword}\n${article.ledeAnswer}\n${article.body.slice(0, 800)}`,
@@ -145,7 +157,7 @@ export async function runPipeline(opts: { siteId: string; jobId?: number }): Pro
     await repo.upsert({
       siteId: site.id,
       url: articleUrl,
-      slug: rendered.slug,
+      slug: primary.slug,
       title: brief.targetKeyword,
       h1: brief.targetKeyword,
       firstParagraph: article.ledeAnswer,
@@ -162,7 +174,7 @@ export async function runPipeline(opts: { siteId: string; jobId?: number }): Pro
 
     return {
       siteId: site.id,
-      slug: rendered.slug,
+      slug: primary.slug,
       url: articleUrl,
       commitSha: publishResult.commitSha,
       targetKeyword: brief.targetKeyword,

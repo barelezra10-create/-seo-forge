@@ -25,15 +25,20 @@ describe("mcaGuideAdapter", () => {
     expect(mcaGuideAdapter.buildPath("foo-bar")).toBe("content/articles/foo-bar.mdx");
   });
 
-  it("renderFile produces expected MDX with frontmatter, body, and sister links section", () => {
-    const out = mcaGuideAdapter.renderFile({
-      brief: { targetKeyword: "MCA basics", intent: "info", outline: ["What"], audience: "founders" },
-      geo: { ledeAnswer: "An MCA is X.", quickFacts: ["Fact 1", "Fact 2"] },
-      body: "## What\n\nBody copy here.",
-      sisterLinks: [
-        { url: "https://fintiex.com/loans/personal-loans-101", title: "Personal Loans 101" },
-      ],
-    });
+  it("renderFile produces expected MDX with frontmatter, body, and sister links section", async () => {
+    const files = await mcaGuideAdapter.renderFile(
+      {
+        brief: { targetKeyword: "MCA basics", intent: "info", outline: ["What"], audience: "founders" },
+        geo: { ledeAnswer: "An MCA is X.", quickFacts: ["Fact 1", "Fact 2"] },
+        body: "## What\n\nBody copy here.",
+        sisterLinks: [
+          { url: "https://fintiex.com/loans/personal-loans-101", title: "Personal Loans 101" },
+        ],
+      },
+      "/tmp/unused",
+    );
+    expect(files).toHaveLength(1);
+    const out = files[0]!;
     expect(out.path).toBe("content/articles/mca-basics.mdx");
     expect(out.content).toContain("---");
     expect(out.content).toContain("title:");
@@ -47,46 +52,55 @@ describe("mcaGuideAdapter", () => {
     expect(out.content).not.toContain("application/ld+json");
   });
 
-  it("renderFile title-cases the target keyword", () => {
-    const out = mcaGuideAdapter.renderFile({
-      brief: {
-        targetKeyword: "merchant cash advance lawyer",
-        intent: "info",
-        outline: [],
-        audience: "",
+  it("renderFile title-cases the target keyword", async () => {
+    const files = await mcaGuideAdapter.renderFile(
+      {
+        brief: {
+          targetKeyword: "merchant cash advance lawyer",
+          intent: "info",
+          outline: [],
+          audience: "",
+        },
+        geo: { ledeAnswer: "Lede.", quickFacts: ["Fact"] },
+        body: "## A\n\nBody.",
+        sisterLinks: [],
       },
-      geo: { ledeAnswer: "Lede.", quickFacts: ["Fact"] },
-      body: "## A\n\nBody.",
-      sisterLinks: [],
-    });
-    expect(out.content).toContain('title: "Merchant Cash Advance Lawyer"');
+      "/tmp/unused",
+    );
+    expect(files[0]!.content).toContain('title: "Merchant Cash Advance Lawyer"');
   });
 
-  it("renderFile keeps small connector words lowercase in title", () => {
-    const out = mcaGuideAdapter.renderFile({
-      brief: {
-        targetKeyword: "the best mca for restaurants",
-        intent: "info",
-        outline: [],
-        audience: "",
+  it("renderFile keeps small connector words lowercase in title", async () => {
+    const files = await mcaGuideAdapter.renderFile(
+      {
+        brief: {
+          targetKeyword: "the best mca for restaurants",
+          intent: "info",
+          outline: [],
+          audience: "",
+        },
+        geo: { ledeAnswer: "Lede.", quickFacts: ["Fact"] },
+        body: "## A\n\nBody.",
+        sisterLinks: [],
       },
-      geo: { ledeAnswer: "Lede.", quickFacts: ["Fact"] },
-      body: "## A\n\nBody.",
-      sisterLinks: [],
-    });
+      "/tmp/unused",
+    );
     // First word always capitalized; "for" stays lowercase because it's a
     // small connector. "Mca" only Title Case'd because the picker hands us
     // lowercase keywords; that's acceptable for the simple helper.
-    expect(out.content).toContain('title: "The Best Mca for Restaurants"');
+    expect(files[0]!.content).toContain('title: "The Best Mca for Restaurants"');
   });
 
-  it("renderFile content has no em dash", () => {
-    const out = mcaGuideAdapter.renderFile({
-      brief: { targetKeyword: "test", intent: "info", outline: [], audience: "" },
-      geo: { ledeAnswer: "An MCA is a tool, not a loan.", quickFacts: ["Fact 1"] },
-      body: "## A section\n\nBody here.",
-      sisterLinks: [],
-    });
-    expect(out.content).not.toContain("—"); // em dash
+  it("renderFile content has no em dash", async () => {
+    const files = await mcaGuideAdapter.renderFile(
+      {
+        brief: { targetKeyword: "test", intent: "info", outline: [], audience: "" },
+        geo: { ledeAnswer: "An MCA is a tool, not a loan.", quickFacts: ["Fact 1"] },
+        body: "## A section\n\nBody here.",
+        sisterLinks: [],
+      },
+      "/tmp/unused",
+    );
+    expect(files[0]!.content).not.toContain("—"); // em dash
   });
 });
