@@ -1,23 +1,21 @@
 #!/bin/sh
 # Bootstrap script for the Railway worker container.
-# If CLAUDE_AUTH_TGZ_B64 is set, decode it and extract into /root/ so the
-# claude-code CLI can find ~/.claude/ tokens. Runs on every container start
-# (cheap — just re-extracts the same files) so re-syncing auth is just an
-# env var update + restart.
+# Claude Code stores OAuth tokens in macOS Keychain (on Bar's Mac), but on
+# Linux it reads them from ~/.claude/.credentials.json. We pass the JSON
+# blob via the CLAUDE_CREDS_JSON env var and write it to disk on every
+# container boot. To resync (e.g. after token revocation), update the env
+# var and restart the service.
 
 set -eu
 
-if [ -n "${CLAUDE_AUTH_TGZ_B64:-}" ]; then
-  echo "[bootstrap] extracting Claude auth from CLAUDE_AUTH_TGZ_B64..."
-  mkdir -p /root
-  echo "$CLAUDE_AUTH_TGZ_B64" | base64 -d | tar -C /root -xz
-  if [ -d /root/.claude ]; then
-    echo "[bootstrap] /root/.claude/ ready ($(ls /root/.claude | wc -l) entries)"
-  else
-    echo "[bootstrap] WARNING: tar extracted but /root/.claude/ not found"
-  fi
+if [ -n "${CLAUDE_CREDS_JSON:-}" ]; then
+  echo "[bootstrap] writing Claude credentials to /root/.claude/.credentials.json"
+  mkdir -p /root/.claude
+  printf '%s' "$CLAUDE_CREDS_JSON" > /root/.claude/.credentials.json
+  chmod 600 /root/.claude/.credentials.json
+  echo "[bootstrap] credentials file: $(wc -c < /root/.claude/.credentials.json) bytes"
 else
-  echo "[bootstrap] CLAUDE_AUTH_TGZ_B64 not set; pipeline will use API fallback"
+  echo "[bootstrap] CLAUDE_CREDS_JSON not set; pipeline will fail on claude-code calls"
 fi
 
 exec "$@"
