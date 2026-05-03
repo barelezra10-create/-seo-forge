@@ -104,8 +104,10 @@ export async function runPipeline(opts: { siteId: string; jobId?: number }): Pro
       await appendJobLog(opts.jobId, `article written (${article.body.length} chars body)`);
 
     // 5. Prepare clone so adapters that mutate existing files (BDI) can read them
+    // Look up per-site PAT (GH_PAT_<SITE>) first; fall back to a single GH_PAT
+    // for users who keep one token covering all repos.
     const patEnvKey = `GH_PAT_${opts.siteId.replace(/-/g, "_").toUpperCase()}`;
-    const pat = process.env[patEnvKey];
+    const pat = process.env[patEnvKey] ?? process.env.GH_PAT;
     const repoUrl = buildAuthenticatedRepoUrl(site.repoUrl, pat);
     const publisher = new GitPublisher({ workspaceDir: env.WORKSPACE_REPOS_DIR });
     const repoPath = await publisher.prepareClone({
