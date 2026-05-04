@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { TopBar } from "@/components/layout/TopBar";
 import { getAllSites } from "@/lib/queries/sites";
 import { formatNumber } from "@/lib/utils";
@@ -8,7 +9,14 @@ export default async function SitesPage() {
   const sites = await getAllSites();
   return (
     <>
-      <TopBar title="Sites" />
+      <TopBar
+        title="Sites"
+        actions={
+          <Link href="/sites/new">
+            <Button size="sm">+ Add site</Button>
+          </Link>
+        }
+      />
       <main className="p-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {sites.map((site) => (
           <Link key={site.id} href={`/sites/${site.id}`}>
