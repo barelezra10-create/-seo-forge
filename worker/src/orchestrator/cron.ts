@@ -1,8 +1,13 @@
 import cron from "node-cron";
-import { processNextPublishJob, enqueueDailyPublishJobs } from "./publish-cron.js";
+import {
+  processNextPublishJob,
+  enqueueDailyPublishJobs,
+  processNextPlannerJob,
+} from "./publish-cron.js";
 import { snapshotAllSitesGsc } from "./gsc-snapshot-cron.js";
 import { snapshotAllSitesAhrefs } from "./ahrefs-snapshot-cron.js";
 import { runOpportunityDetectors } from "../opportunities/opportunities.js";
+import { planAllSitesForDate } from "./planner-cron.js";
 
 const env = (k: string) => {
   const v = process.env[k];
@@ -19,6 +24,35 @@ cron.schedule("*/30 * * * * *", async () => {
     if (result) console.log(`[cron] processed publish job ${result.jobId}`);
   } catch (e) {
     console.error("[cron] publish job error:", (e as Error).message);
+  }
+});
+
+// Process planner queue every 30 seconds
+cron.schedule("*/30 * * * * *", async () => {
+  try {
+    const r = await processNextPlannerJob();
+    if (r) console.log(`[cron] processed planner job ${r.jobId}`);
+  } catch (e) {
+    console.error("[cron] planner job error:", (e as Error).message);
+  }
+});
+
+// Plan tomorrow's articles at 5am (1 hour before publish enqueue)
+cron.schedule("0 5 * * *", async () => {
+  try {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const r = await planAllSitesForDate({
+      date: tomorrow.toISOString().slice(0, 10),
+      voyageKey: env("VOYAGE_API_KEY"),
+      ahrefsKey: env("AHREFS_API_KEY"),
+      gscRefreshToken: env("GSC_REFRESH_TOKEN"),
+      gscClientId: env("GSC_CLIENT_ID"),
+      gscClientSecret: env("GSC_CLIENT_SECRET"),
+    });
+    console.log(`[cron] planner: planned=${r.planned} skipped=${r.skipped}`);
+  } catch (e) {
+    console.error("[cron] planner error:", (e as Error).message);
   }
 });
 

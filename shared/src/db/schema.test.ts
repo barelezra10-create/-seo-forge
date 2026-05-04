@@ -7,6 +7,7 @@ import {
   gscSnapshot,
   ahrefsSnapshot,
   opportunities,
+  articlePlans,
 } from "./schema";
 
 describe("db schema", () => {
@@ -45,5 +46,15 @@ describe("db schema", () => {
     expect(opportunities.type.name).toBe("type");
     expect(opportunities.status.name).toBe("status");
     expect(opportunities.payload.name).toBe("payload");
+  });
+  it("articlePlans has expected columns", () => {
+    expect(articlePlans.siteId.name).toBe("site_id");
+    expect(articlePlans.plannedDate.name).toBe("planned_date");
+    expect(articlePlans.targetKeyword.name).toBe("target_keyword");
+    expect(articlePlans.intent.name).toBe("intent");
+    expect(articlePlans.research.name).toBe("research");
+    expect(articlePlans.sisterLinks.name).toBe("sister_links");
+    expect(articlePlans.status.name).toBe("status");
+    expect(articlePlans.publishedJobId.name).toBe("published_job_id");
   });
 });

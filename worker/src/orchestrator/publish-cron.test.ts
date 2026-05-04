@@ -42,6 +42,7 @@ beforeAll(async () => {
     .onConflictDoNothing();
 });
 afterAll(async () => {
+  await db.execute(sql`DELETE FROM article_plans WHERE site_id LIKE 'test-pub-%'`);
   await db.execute(sql`DELETE FROM jobs WHERE site_id LIKE 'test-pub-%'`);
   await db.execute(sql`DELETE FROM sites WHERE id LIKE 'test-pub-%'`);
   await close();
@@ -109,10 +110,26 @@ describe("processNextPublishJob", () => {
 });
 
 describe("enqueueDailyPublishJobs", () => {
-  it("enqueues a publish job per site where autoPublish=true and killSwitch=false", async () => {
+  it("enqueues a publish job per site where autoPublish=true, killSwitch=false, AND a plan exists for today", async () => {
     await db.execute(
       sql`DELETE FROM jobs WHERE site_id LIKE 'test-pub-%' AND payload->>'source' = 'daily-cron'`,
     );
+    const today = new Date().toISOString().slice(0, 10);
+    // Seed a plan for the eligible site so enqueueDailyPublishJobs has work to do.
+    await db
+      .insert(tables.articlePlans)
+      .values({
+        siteId: "test-pub-on",
+        plannedDate: today,
+        targetKeyword: "test plan kw",
+        intent: "informational",
+        research: { source: "ahrefs", volume: 100, kd: 5, audience: "test", outline: ["a"] },
+        sisterLinks: [],
+        status: "planned",
+      })
+      .onConflictDoNothing();
+    // Production sites won't have plans for "today" during the test run, so they should be skipped.
+
     const count = await enqueueDailyPublishJobs();
     expect(count).toBeGreaterThanOrEqual(1);
 

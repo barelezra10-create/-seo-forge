@@ -1,19 +1,15 @@
 import { createDb, parseEnv, tables } from "@seo-forge/shared";
 import { eq } from "drizzle-orm";
-import { mcaGuideAdapter } from "../sites/mca-guide/adapter.js";
-import { bdiAdapter } from "../sites/bdi/adapter.js";
 import { GitPublisher } from "../publishers/git-publisher.js";
 import { ContentIndexRepo } from "../content-index/repo.js";
 import { embedText } from "../embeddings/voyage.js";
 import { gatherCandidates, selectKeyword, buildBrief } from "../jobs/keyword-research.js";
 import { runWriteArticle } from "../jobs/write-article.js";
-import type { SiteAdapter } from "../sites/adapter.js";
+import type { KeywordBrief } from "../jobs/write-article.prompt.js";
+import { ADAPTERS_BY_SITE_ID } from "../sites/adapters.js";
 import { appendJobLog } from "../orchestrator/publish-cron.js";
 
-const ADAPTERS: Record<string, SiteAdapter> = {
-  "mca-guide": mcaGuideAdapter,
-  "bdi": bdiAdapter,
-};
+const ADAPTERS = ADAPTERS_BY_SITE_ID;
 
 export type PipelineResult = {
   siteId: string;
@@ -31,7 +27,7 @@ function buildAuthenticatedRepoUrl(sshUrl: string, pat: string | undefined): str
   return `https://x-access-token:${pat}@github.com/${m[1]}.git`;
 }
 
-export async function runPipeline(opts: { siteId: string; jobId?: number }): Promise<PipelineResult> {
+export async function runPipeline(opts: { siteId: string; jobId?: number; planId?: number }): Promise<PipelineResult> {
   const env = parseEnv(process.env);
   const adapter = ADAPTERS[opts.siteId];
   if (!adapter) throw new Error(`No adapter for site ${opts.siteId}`);
@@ -42,52 +38,104 @@ export async function runPipeline(opts: { siteId: string; jobId?: number }): Pro
     if (!site) throw new Error(`Site ${opts.siteId} not found`);
     if (site.killSwitch) throw new Error(`Site ${opts.siteId} has kill switch on`);
 
-    // 1. Covered slugs (skip already-written topics)
-    const indexRows = await db
-      .select({ slug: tables.contentIndex.slug })
-      .from(tables.contentIndex)
-      .where(eq(tables.contentIndex.siteId, opts.siteId));
-    const coveredSlugs = new Set(indexRows.map((r) => r.slug));
-
-    // 2. Keyword research
-    const candidates = await gatherCandidates({
-      siteId: site.id,
-      domain: site.domain,
-      seed: adapter.defaultSeed,
-      coveredSlugs,
-      ahrefsKey: env.AHREFS_API_KEY,
-      gscRefreshToken: env.GSC_REFRESH_TOKEN,
-      gscClientId: env.GSC_CLIENT_ID,
-      gscClientSecret: env.GSC_CLIENT_SECRET,
-    });
-    const picked = selectKeyword({ candidates, coveredSlugs });
-    if (!picked) throw new Error("No eligible keyword candidates");
-    const brief = buildBrief(picked, "founders running cash-flow businesses");
-    console.log(
-      `[pipeline] picked keyword: "${brief.targetKeyword}" (${brief.source}, vol=${brief.volume}, kd=${brief.kd})`,
-    );
-    if (opts.jobId)
-      await appendJobLog(
-        opts.jobId,
-        `picked keyword: "${brief.targetKeyword}" (${brief.source}, vol=${brief.volume}, kd=${brief.kd})`,
-      );
-
-    // 3. Sister-site internal links
-    const briefEmbed = await embedText(
-      `${brief.targetKeyword}\n${brief.outline.join("\n")}`,
-      env.VOYAGE_API_KEY,
-    );
+    let brief: KeywordBrief;
+    let sisterHits: Array<{ siteId?: string; url: string; title: string; distance?: number }>;
     const repo = new ContentIndexRepo(db);
-    const sisterHits = await repo.findSimilarOnOtherSites({
-      embedding: briefEmbed,
-      excludeSiteId: opts.siteId,
-      limit: 2,
-      maxDistance: 0.45,
-    });
-    console.log(
-      `[pipeline] sister links: ${sisterHits.length}${sisterHits.length > 0 ? " (" + sisterHits.map((h) => h.url).join(", ") + ")" : ""}`,
-    );
-    if (opts.jobId) await appendJobLog(opts.jobId, `sister links: ${sisterHits.length}`);
+
+    if (opts.planId) {
+      // Plan-driven path: read keyword + sister links from the article_plans row.
+      const [plan] = await db
+        .select()
+        .from(tables.articlePlans)
+        .where(eq(tables.articlePlans.id, opts.planId));
+      if (!plan) throw new Error(`Plan ${opts.planId} not found`);
+      if (plan.siteId !== opts.siteId) {
+        throw new Error(`Plan ${opts.planId} belongs to ${plan.siteId}, not ${opts.siteId}`);
+      }
+      const research = (plan.research ?? {}) as {
+        source?: "ahrefs" | "gsc";
+        volume?: number;
+        kd?: number;
+        audience?: string;
+        outline?: string[];
+      };
+      brief = {
+        targetKeyword: plan.targetKeyword,
+        intent: plan.intent,
+        outline: research.outline ?? [
+          `Direct answer: define ${plan.targetKeyword}`,
+          `Context: when this matters for the reader`,
+          `Specifics with numbers and examples`,
+          `Common pitfalls / what to avoid`,
+          `Action steps`,
+        ],
+        audience: research.audience ?? "founders running cash-flow businesses",
+        source: research.source ?? "ahrefs",
+        volume: research.volume ?? 0,
+        kd: research.kd ?? 0,
+      };
+      sisterHits = ((plan.sisterLinks ?? []) as Array<{ siteId: string; url: string; title: string; distance: number }>).map((l) => ({
+        siteId: l.siteId,
+        url: l.url,
+        title: l.title,
+        distance: l.distance,
+      }));
+      console.log(
+        `[pipeline] using plan ${opts.planId}: "${brief.targetKeyword}" (${brief.source}, vol=${brief.volume}, kd=${brief.kd})`,
+      );
+      if (opts.jobId)
+        await appendJobLog(
+          opts.jobId,
+          `using plan ${opts.planId}: "${brief.targetKeyword}" (${brief.source}, vol=${brief.volume}, kd=${brief.kd})`,
+        );
+      if (opts.jobId) await appendJobLog(opts.jobId, `sister links from plan: ${sisterHits.length}`);
+    } else {
+      // 1. Covered slugs (skip already-written topics)
+      const indexRows = await db
+        .select({ slug: tables.contentIndex.slug })
+        .from(tables.contentIndex)
+        .where(eq(tables.contentIndex.siteId, opts.siteId));
+      const coveredSlugs = new Set(indexRows.map((r) => r.slug));
+
+      // 2. Keyword research
+      const candidates = await gatherCandidates({
+        siteId: site.id,
+        domain: site.domain,
+        seed: adapter.defaultSeed,
+        coveredSlugs,
+        ahrefsKey: env.AHREFS_API_KEY,
+        gscRefreshToken: env.GSC_REFRESH_TOKEN,
+        gscClientId: env.GSC_CLIENT_ID,
+        gscClientSecret: env.GSC_CLIENT_SECRET,
+      });
+      const picked = selectKeyword({ candidates, coveredSlugs });
+      if (!picked) throw new Error("No eligible keyword candidates");
+      brief = buildBrief(picked, "founders running cash-flow businesses");
+      console.log(
+        `[pipeline] picked keyword: "${brief.targetKeyword}" (${brief.source}, vol=${brief.volume}, kd=${brief.kd})`,
+      );
+      if (opts.jobId)
+        await appendJobLog(
+          opts.jobId,
+          `picked keyword: "${brief.targetKeyword}" (${brief.source}, vol=${brief.volume}, kd=${brief.kd})`,
+        );
+
+      // 3. Sister-site internal links
+      const briefEmbed = await embedText(
+        `${brief.targetKeyword}\n${brief.outline.join("\n")}`,
+        env.VOYAGE_API_KEY,
+      );
+      sisterHits = await repo.findSimilarOnOtherSites({
+        embedding: briefEmbed,
+        excludeSiteId: opts.siteId,
+        limit: 2,
+        maxDistance: 0.45,
+      });
+      console.log(
+        `[pipeline] sister links: ${sisterHits.length}${sisterHits.length > 0 ? " (" + sisterHits.map((h) => h.url).join(", ") + ")" : ""}`,
+      );
+      if (opts.jobId) await appendJobLog(opts.jobId, `sister links: ${sisterHits.length}`);
+    }
 
     // 4. Write article via claude-code
     console.log(`[pipeline] running claude-code session (this can take 5-15 min)...`);
@@ -175,6 +223,18 @@ export async function runPipeline(opts: { siteId: string; jobId?: number }): Pro
         sisterLinks: sisterHits.map((h) => h.url),
       },
     });
+
+    // 9. If this was plan-driven, mark the plan as published.
+    if (opts.planId) {
+      await db
+        .update(tables.articlePlans)
+        .set({
+          status: "published",
+          publishedJobId: opts.jobId ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(tables.articlePlans.id, opts.planId));
+    }
 
     return {
       siteId: site.id,

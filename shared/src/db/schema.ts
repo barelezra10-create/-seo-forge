@@ -170,3 +170,30 @@ export const opportunities = pgTable(
     siteStatusIdx: index("opportunities_site_status_idx").on(t.siteId, t.status),
   }),
 );
+
+export const planStatusEnum = pgEnum("plan_status", ["planned", "published", "skipped", "failed"]);
+
+export const articlePlans = pgTable(
+  "article_plans",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id),
+    plannedDate: date("planned_date").notNull(),
+    targetKeyword: text("target_keyword").notNull(),
+    intent: text("intent").notNull().default("informational"),
+    /** JSON: { source: "ahrefs" | "gsc", volume, kd, position?, audience, outline: [] } */
+    research: jsonb("research").notNull().default({}),
+    /** JSON: [{ siteId, url, title, distance }] - predicted sister-site links */
+    sisterLinks: jsonb("sister_links").notNull().default([]),
+    status: planStatusEnum("status").notNull().default("planned"),
+    publishedJobId: bigint("published_job_id", { mode: "number" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    siteDateIdx: uniqueIndex("article_plans_site_date_idx").on(t.siteId, t.plannedDate),
+    statusIdx: index("article_plans_status_idx").on(t.status),
+  }),
+);
