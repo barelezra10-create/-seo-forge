@@ -139,3 +139,37 @@ export async function planAllSitesForDate(
   }
   return { planned, skipped };
 }
+
+/**
+ * Plan EVERY day in a calendar month across all eligible sites. Idempotent:
+ * existing plan rows for a (site, date) are upserted by planSiteForDate.
+ * Skips dates that have already passed (today and earlier) when called
+ * mid-month so we don't backfill the past.
+ */
+export async function planAllSitesForMonth(
+  i: Omit<PlanInput, "siteId" | "date"> & { year: number; month: number /* 1-12 */ },
+): Promise<{ planned: number; skipped: number; daysCovered: number }> {
+  const startOfMonth = new Date(Date.UTC(i.year, i.month - 1, 1));
+  const startOfNextMonth = new Date(Date.UTC(i.year, i.month, 1));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dates: string[] = [];
+  for (
+    let d = new Date(startOfMonth);
+    d < startOfNextMonth;
+    d.setUTCDate(d.getUTCDate() + 1)
+  ) {
+    if (d < today) continue; // skip past dates
+    dates.push(d.toISOString().slice(0, 10));
+  }
+
+  let planned = 0;
+  let skipped = 0;
+  for (const date of dates) {
+    const r = await planAllSitesForDate({ ...i, date });
+    planned += r.planned;
+    skipped += r.skipped;
+  }
+  return { planned, skipped, daysCovered: dates.length };
+}

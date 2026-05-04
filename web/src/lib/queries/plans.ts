@@ -21,7 +21,7 @@ export type PlanRow = {
   publishedJobId: number | null;
 };
 
-export async function listUpcomingPlans(daysAhead = 14): Promise<PlanRow[]> {
+export async function listUpcomingPlans(daysAhead = 45): Promise<PlanRow[]> {
   const db = getDb();
   const cutoff = new Date();
   cutoff.setHours(0, 0, 0, 0);

@@ -7,7 +7,7 @@ import {
 import { snapshotAllSitesGsc } from "./gsc-snapshot-cron.js";
 import { snapshotAllSitesAhrefs } from "./ahrefs-snapshot-cron.js";
 import { runOpportunityDetectors } from "../opportunities/opportunities.js";
-import { planAllSitesForDate } from "./planner-cron.js";
+import { planAllSitesForDate, planAllSitesForMonth } from "./planner-cron.js";
 
 const env = (k: string) => {
   const v = process.env[k];
@@ -37,7 +37,28 @@ cron.schedule("*/30 * * * * *", async () => {
   }
 });
 
-// Plan tomorrow's articles at 5am (1 hour before publish enqueue)
+// On the 1st of each month at 5am, plan the WHOLE month across all sites.
+// The daily 5am cron below still runs as a safety net (idempotent: existing
+// plan rows for a date are upserted).
+cron.schedule("0 5 1 * *", async () => {
+  try {
+    const today = new Date();
+    const r = await planAllSitesForMonth({
+      year: today.getFullYear(),
+      month: today.getMonth() + 1,
+      voyageKey: env("VOYAGE_API_KEY"),
+      ahrefsKey: env("AHREFS_API_KEY"),
+      gscRefreshToken: env("GSC_REFRESH_TOKEN"),
+      gscClientId: env("GSC_CLIENT_ID"),
+      gscClientSecret: env("GSC_CLIENT_SECRET"),
+    });
+    console.log(`[cron] monthly planner: planned=${r.planned} skipped=${r.skipped} (${r.daysCovered} days)`);
+  } catch (e) {
+    console.error("[cron] monthly planner error:", (e as Error).message);
+  }
+});
+
+// Plan tomorrow's articles at 5am every day (catch-up + safety net for the monthly run)
 cron.schedule("0 5 * * *", async () => {
   try {
     const tomorrow = new Date();
