@@ -36,6 +36,24 @@ export async function listUpcomingPlans(daysAhead = 45): Promise<PlanRow[]> {
   return rows as unknown as PlanRow[];
 }
 
+export async function getPlansForMonthAndSite(
+  siteId: string,
+  year: number,
+  month: number /* 1-12 */,
+): Promise<PlanRow[]> {
+  const db = getDb();
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 1));
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+  const rows = await db
+    .select()
+    .from(tables.articlePlans)
+    .where(sql`site_id = ${siteId} AND planned_date >= ${startStr} AND planned_date < ${endStr}`)
+    .orderBy(tables.articlePlans.plannedDate);
+  return rows as unknown as PlanRow[];
+}
+
 export async function getPlan(id: number): Promise<PlanRow | null> {
   const db = getDb();
   const [row] = await db.select().from(tables.articlePlans).where(eq(tables.articlePlans.id, id));

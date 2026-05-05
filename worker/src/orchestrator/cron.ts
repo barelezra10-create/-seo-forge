@@ -3,6 +3,7 @@ import {
   processNextPublishJob,
   enqueueDailyPublishJobs,
   processNextPlannerJob,
+  processNextSingleDayPlannerJob,
 } from "./publish-cron.js";
 import { snapshotAllSitesGsc } from "./gsc-snapshot-cron.js";
 import { snapshotAllSitesAhrefs } from "./ahrefs-snapshot-cron.js";
@@ -34,6 +35,16 @@ cron.schedule("*/30 * * * * *", async () => {
     if (r) console.log(`[cron] processed planner job ${r.jobId}`);
   } catch (e) {
     console.error("[cron] planner job error:", (e as Error).message);
+  }
+});
+
+// Process single-day planner queue every 30 seconds
+cron.schedule("*/30 * * * * *", async () => {
+  try {
+    const r = await processNextSingleDayPlannerJob();
+    if (r) console.log(`[cron] processed single-day planner job ${r.jobId}`);
+  } catch (e) {
+    console.error("[cron] single-day planner job error:", (e as Error).message);
   }
 });
 

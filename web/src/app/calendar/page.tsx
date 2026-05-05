@@ -1,138 +1,284 @@
+import Link from "next/link";
 import { TopBar } from "@/components/layout/TopBar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { listUpcomingPlans } from "@/lib/queries/plans";
+import { getPlansForMonthAndSite } from "@/lib/queries/plans";
 import { getAllSites } from "@/lib/queries/sites";
 
-const STATUS_BADGES: Record<string, string> = {
-  planned: "bg-blue-100 text-blue-700",
-  published: "bg-green-100 text-green-700",
-  skipped: "bg-zinc-100 text-zinc-500",
-  failed: "bg-red-100 text-red-700",
+const INTENT_BADGES: Record<string, string> = {
+  informational: "bg-purple-100 text-purple-700",
+  commercial: "bg-emerald-100 text-emerald-700",
+  transactional: "bg-amber-100 text-amber-700",
+  navigational: "bg-sky-100 text-sky-700",
 };
 
-function groupByDate(plans: Awaited<ReturnType<typeof listUpcomingPlans>>) {
-  const map = new Map<string, typeof plans>();
-  for (const p of plans) {
-    const arr = map.get(p.plannedDate) ?? [];
-    arr.push(p);
-    map.set(p.plannedDate, arr);
-  }
-  return Array.from(map.entries()).sort(([a], [b]) => (a < b ? -1 : 1));
-}
+const INTENT_LABELS: Record<string, string> = {
+  informational: "Guide",
+  commercial: "Listicle",
+  transactional: "Service",
+  navigational: "Brand",
+};
 
-export default async function CalendarPage() {
-  const [plans, sites] = await Promise.all([listUpcomingPlans(14), getAllSites()]);
-  const sitesById = Object.fromEntries(sites.map((s) => [s.id, s.name]));
-  const grouped = groupByDate(plans);
+const STATUS_DOT: Record<string, string> = {
+  planned: "bg-zinc-300",
+  published: "bg-green-500",
+  skipped: "bg-zinc-200",
+  failed: "bg-red-500",
+};
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+type SearchParams = Promise<{ site?: string; year?: string; month?: string }>;
+
+export default async function CalendarPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const sp = await searchParams;
+  const sites = await getAllSites();
+  const siteId =
+    sp.site && sites.some((s) => s.id === sp.site) ? sp.site : sites[0]?.id;
+  if (!siteId) {
+    return (
+      <>
+        <TopBar title="Calendar" />
+        <main className="p-6">
+          <Card>
+            <CardContent className="pt-12 pb-12 text-center text-zinc-500">
+              Add a site first.
+            </CardContent>
+          </Card>
+        </main>
+      </>
+    );
+  }
+
+  const today = new Date();
+  const year = sp.year ? Number(sp.year) : today.getFullYear();
+  const month = sp.month ? Number(sp.month) : today.getMonth() + 1; // 1-12
+
+  const plans = await getPlansForMonthAndSite(siteId, year, month);
+  const plansByDate = new Map<string, (typeof plans)[number]>();
+  for (const p of plans) plansByDate.set(p.plannedDate, p);
+
+  // Build the visible month grid (always render up to 6 rows x 7 cols; weeks start Sunday)
+  const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
+  const startWeekday = firstOfMonth.getUTCDay(); // 0 = Sunday
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setUTCDate(firstOfMonth.getUTCDate() - startWeekday);
+  const cells: {
+    dateStr: string;
+    day: number;
+    inMonth: boolean;
+    isToday: boolean;
+  }[] = [];
+  const todayStr = today.toISOString().slice(0, 10);
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setUTCDate(gridStart.getUTCDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    cells.push({
+      dateStr,
+      day: d.getUTCDate(),
+      inMonth: d.getUTCMonth() === month - 1,
+      isToday: dateStr === todayStr,
+    });
+  }
+
+  // Trim trailing all-out-of-month rows (max 6 rows shown; remove last row if entirely out of month)
+  const lastRow = cells.slice(35);
+  const showSixRows = lastRow.some((c) => c.inMonth);
+  const visibleCells = showSixRows ? cells : cells.slice(0, 35);
+
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+  const prevMonth =
+    month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
+  const nextMonth =
+    month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+
+  const navLink = (y: number, m: number) =>
+    `/calendar?site=${encodeURIComponent(siteId)}&year=${y}&month=${m}`;
 
   return (
     <>
       <TopBar
-        title="Calendar"
+        title="Content calendar"
         actions={
           <form action="/api/plans/regenerate" method="POST">
             <Button type="submit" variant="outline" size="sm">
-              Regenerate
+              Regenerate month
             </Button>
           </form>
         }
       />
-      <main className="p-6 space-y-6 max-w-5xl">
-        {grouped.length === 0 ? (
-          <Card>
-            <CardContent className="pt-12 pb-12 text-center text-zinc-500">
-              <p className="font-medium mb-1">No plans yet.</p>
-              <p className="text-sm">
-                Click &quot;Regenerate&quot; to plan the next 7 days, or wait for the 5am cron.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          grouped.map(([date, plansForDate]) => (
-            <div key={date}>
-              <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
-                {new Date(date + "T00:00:00").toLocaleDateString(undefined, {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </h2>
-              <div className="space-y-3">
-                {plansForDate.map((p) => (
-                  <Card key={p.id}>
-                    <CardContent className="pt-5 pb-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded ${STATUS_BADGES[p.status]}`}
-                            >
-                              {p.status}
-                            </span>
-                            <span className="text-xs text-zinc-500">
-                              {sitesById[p.siteId] ?? p.siteId}
-                            </span>
-                            <span className="text-xs text-zinc-400">·</span>
-                            <span className="text-xs text-zinc-500">
-                              {p.research.source} · vol {p.research.volume ?? 0} · KD{" "}
-                              {p.research.kd ?? "?"}
-                            </span>
-                          </div>
-                          <h3 className="font-semibold mb-1">{p.targetKeyword}</h3>
-                          {p.research.outline && p.research.outline.length > 0 && (
-                            <p className="text-sm text-zinc-600 mb-2 line-clamp-1">
-                              {p.research.outline[0]}
-                            </p>
-                          )}
-                          {p.sisterLinks.length > 0 && (
-                            <div className="text-xs text-zinc-500 mt-2">
-                              <span className="font-medium">Will mention: </span>
-                              {p.sisterLinks.map((l, i) => (
-                                <span key={l.url}>
-                                  {i > 0 && ", "}
-                                  <a
-                                    href={l.url}
-                                    target="_blank"
-                                    className="text-blue-600 hover:underline"
-                                  >
-                                    {l.title}
-                                  </a>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        {p.status === "planned" && (
-                          <div className="flex gap-2 shrink-0">
-                            <form action={`/api/plans/${p.id}/skip`} method="POST">
-                              <Button type="submit" variant="outline" size="sm">
-                                Skip
-                              </Button>
-                            </form>
-                            <form action={`/api/plans/${p.id}/publish-now`} method="POST">
-                              <Button type="submit" size="sm">
-                                Publish now
-                              </Button>
-                            </form>
-                          </div>
-                        )}
-                        {p.status === "published" && p.publishedJobId && (
-                          <a
-                            href={`/jobs/${p.publishedJobId}`}
-                            className="text-xs text-blue-600 hover:underline shrink-0"
-                          >
-                            view job →
-                          </a>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+      <main className="p-6 space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <form className="flex items-center gap-2">
+            <label htmlFor="site-select" className="text-sm text-zinc-500">
+              Site:
+            </label>
+            <select
+              id="site-select"
+              name="site"
+              defaultValue={siteId}
+              className="border border-zinc-200 rounded-md px-3 py-1.5 text-sm bg-white"
+            >
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <input type="hidden" name="year" value={year} />
+            <input type="hidden" name="month" value={month} />
+            <button
+              type="submit"
+              className="border border-zinc-200 rounded-md px-3 py-1.5 text-sm bg-white hover:bg-zinc-50"
+            >
+              Switch
+            </button>
+          </form>
+          <div className="flex items-center gap-2">
+            <Link
+              href={navLink(prevMonth.y, prevMonth.m)}
+              className="border border-zinc-200 rounded-md px-3 py-1.5 text-sm bg-white hover:bg-zinc-50"
+              aria-label="Previous month"
+            >
+              &larr;
+            </Link>
+            <span className="text-lg font-semibold min-w-[180px] text-center">
+              {monthLabel}
+            </span>
+            <Link
+              href={navLink(nextMonth.y, nextMonth.m)}
+              className="border border-zinc-200 rounded-md px-3 py-1.5 text-sm bg-white hover:bg-zinc-50"
+              aria-label="Next month"
+            >
+              &rarr;
+            </Link>
+          </div>
+        </div>
+
+        <Card className="overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-zinc-200 bg-zinc-50">
+            {WEEKDAYS.map((w) => (
+              <div
+                key={w}
+                className="px-3 py-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase text-center"
+              >
+                {w}
               </div>
-            </div>
-          ))
-        )}
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {visibleCells.map((cell) => {
+              const plan = plansByDate.get(cell.dateStr);
+              return (
+                <div
+                  key={cell.dateStr}
+                  className={`border-r border-b border-zinc-200 last:border-r-0 min-h-[140px] p-2 flex flex-col gap-1 ${
+                    cell.inMonth ? "bg-white" : "bg-zinc-50/50"
+                  } ${cell.isToday ? "ring-2 ring-inset ring-blue-300" : ""}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`text-sm font-medium ${
+                        cell.inMonth ? "text-zinc-900" : "text-zinc-400"
+                      }`}
+                    >
+                      {cell.day}
+                    </span>
+                    {plan && (
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          STATUS_DOT[plan.status] ?? "bg-zinc-200"
+                        }`}
+                        title={plan.status}
+                      />
+                    )}
+                  </div>
+
+                  {plan ? (
+                    <div className="flex-1 flex flex-col gap-1">
+                      <span
+                        className={`inline-block self-start text-[10px] px-1.5 py-0.5 rounded ${
+                          INTENT_BADGES[plan.intent] ??
+                          "bg-zinc-100 text-zinc-600"
+                        }`}
+                      >
+                        {INTENT_LABELS[plan.intent] ?? plan.intent}
+                      </span>
+                      <p className="text-xs font-medium text-zinc-800 leading-tight line-clamp-3">
+                        {plan.targetKeyword}
+                      </p>
+                      {plan.sisterLinks.length > 0 && (
+                        <p className="text-[10px] text-zinc-400">
+                          &uarr; {plan.sisterLinks.length} link
+                          {plan.sisterLinks.length === 1 ? "" : "s"}
+                        </p>
+                      )}
+                      {plan.status === "planned" && cell.inMonth && (
+                        <div className="mt-auto flex gap-1">
+                          <form
+                            action={`/api/plans/${plan.id}/publish-now`}
+                            method="POST"
+                            className="flex-1"
+                          >
+                            <button
+                              type="submit"
+                              className="w-full text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded px-1.5 py-1 font-medium"
+                            >
+                              Publish
+                            </button>
+                          </form>
+                          <form
+                            action={`/api/plans/${plan.id}/skip`}
+                            method="POST"
+                          >
+                            <button
+                              type="submit"
+                              className="text-[10px] border border-zinc-200 hover:bg-zinc-100 rounded px-1.5 py-1 text-zinc-600"
+                              title="Skip this day"
+                            >
+                              &times;
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                      {plan.status === "published" && plan.publishedJobId && (
+                        <Link
+                          href={`/jobs/${plan.publishedJobId}`}
+                          className="text-[10px] text-blue-600 hover:underline mt-auto"
+                        >
+                          view job &rarr;
+                        </Link>
+                      )}
+                    </div>
+                  ) : cell.inMonth ? (
+                    <form
+                      action="/api/plans/plan-day"
+                      method="POST"
+                      className="flex-1 flex"
+                    >
+                      <input type="hidden" name="date" value={cell.dateStr} />
+                      <input type="hidden" name="siteId" value={siteId} />
+                      <button
+                        type="submit"
+                        className="flex-1 text-[11px] text-zinc-400 hover:text-zinc-700 hover:bg-zinc-50 rounded p-1 text-left"
+                      >
+                        Generate keyword
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       </main>
     </>
   );

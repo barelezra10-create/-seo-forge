@@ -2,7 +2,7 @@ import { tables } from "@seo-forge/shared";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "./_db-singleton.js";
 import { runPipeline } from "../pipeline/pipeline.js";
-import { planAllSitesForDate } from "./planner-cron.js";
+import { planAllSitesForDate, planSiteForDate } from "./planner-cron.js";
 
 export type ProcessResult = { jobId: number; result: unknown };
 
@@ -132,6 +132,61 @@ export async function processNextPlannerJob(): Promise<{ jobId: number } | null>
 
   try {
     const r = await planAllSitesForDate({
+      date: job.payload.date,
+      voyageKey: process.env.VOYAGE_API_KEY!,
+      ahrefsKey: process.env.AHREFS_API_KEY!,
+      gscRefreshToken: process.env.GSC_REFRESH_TOKEN!,
+      gscClientId: process.env.GSC_CLIENT_ID!,
+      gscClientSecret: process.env.GSC_CLIENT_SECRET!,
+    });
+    await db
+      .update(tables.jobs)
+      .set({ status: "succeeded", finishedAt: new Date(), result: r })
+      .where(eq(tables.jobs.id, job.id));
+    return { jobId: job.id };
+  } catch (e) {
+    await db
+      .update(tables.jobs)
+      .set({
+        status: "failed",
+        finishedAt: new Date(),
+        error: (e as Error).message.slice(0, 1000),
+      })
+      .where(eq(tables.jobs.id, job.id));
+    throw e;
+  }
+}
+
+export async function processNextSingleDayPlannerJob(): Promise<{ jobId: number } | null> {
+  const db = getDb();
+  const claimed = await db.execute<{
+    id: number;
+    payload: { date: string; siteId: string };
+  }>(sql`
+    UPDATE jobs SET status = 'claimed', claimed_at = NOW()
+    WHERE id = (
+      SELECT id FROM jobs
+      WHERE status = 'pending' AND type = 'planner-single'
+      ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED
+    )
+    RETURNING id, payload
+  `);
+  const rows = claimed as unknown as Array<{
+    id: number | string;
+    payload: { date: string; siteId: string };
+  }>;
+  if (rows.length === 0) return null;
+  const raw = rows[0]!;
+  const job = { id: Number(raw.id), payload: raw.payload };
+
+  await db
+    .update(tables.jobs)
+    .set({ status: "running", startedAt: new Date() })
+    .where(eq(tables.jobs.id, job.id));
+
+  try {
+    const r = await planSiteForDate({
+      siteId: job.payload.siteId,
       date: job.payload.date,
       voyageKey: process.env.VOYAGE_API_KEY!,
       ahrefsKey: process.env.AHREFS_API_KEY!,
