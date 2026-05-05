@@ -54,6 +54,74 @@ export async function getPlansForMonthAndSite(
   return rows as unknown as PlanRow[];
 }
 
+export type PublishedArticle = {
+  id: number;
+  siteId: string;
+  url: string;
+  slug: string;
+  title: string;
+  publishedDate: string; // YYYY-MM-DD, derived from published_at or last_indexed
+  hasTranscript: boolean; // true if SEO Forge wrote it (vs pre-existing backfilled article)
+};
+
+/**
+ * Articles that landed on this site during the given month. Pulled from
+ * content_index — both SEO-Forge-published (claude_transcript NOT NULL) and
+ * pre-existing backfilled articles count, but the calendar UI distinguishes
+ * by hasTranscript.
+ */
+export async function getPublishedArticlesForMonthAndSite(
+  siteId: string,
+  year: number,
+  month: number /* 1-12 */,
+): Promise<PublishedArticle[]> {
+  const db = getDb();
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 1));
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+  const rows = await db.execute<{
+    id: number;
+    site_id: string;
+    url: string;
+    slug: string;
+    title: string;
+    published_date: string;
+    has_transcript: boolean;
+  }>(sql`
+    SELECT
+      id,
+      site_id,
+      url,
+      slug,
+      title,
+      to_char(COALESCE(published_at, last_indexed), 'YYYY-MM-DD') AS published_date,
+      (claude_transcript IS NOT NULL) AS has_transcript
+    FROM content_index
+    WHERE site_id = ${siteId}
+      AND COALESCE(published_at, last_indexed) >= ${startStr}
+      AND COALESCE(published_at, last_indexed) < ${endStr}
+    ORDER BY COALESCE(published_at, last_indexed) DESC
+  `);
+  return (rows as unknown as Array<{
+    id: number;
+    site_id: string;
+    url: string;
+    slug: string;
+    title: string;
+    published_date: string;
+    has_transcript: boolean;
+  }>).map((r) => ({
+    id: r.id,
+    siteId: r.site_id,
+    url: r.url,
+    slug: r.slug,
+    title: r.title,
+    publishedDate: String(r.published_date),
+    hasTranscript: r.has_transcript,
+  }));
+}
+
 export async function getPlan(id: number): Promise<PlanRow | null> {
   const db = getDb();
   const [row] = await db.select().from(tables.articlePlans).where(eq(tables.articlePlans.id, id));

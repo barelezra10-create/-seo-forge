@@ -2,7 +2,11 @@ import Link from "next/link";
 import { TopBar } from "@/components/layout/TopBar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getPlansForMonthAndSite } from "@/lib/queries/plans";
+import {
+  getPlansForMonthAndSite,
+  getPublishedArticlesForMonthAndSite,
+  type PublishedArticle,
+} from "@/lib/queries/plans";
 import { getAllSites } from "@/lib/queries/sites";
 
 const INTENT_BADGES: Record<string, string> = {
@@ -58,9 +62,20 @@ export default async function CalendarPage({
   const year = sp.year ? Number(sp.year) : today.getFullYear();
   const month = sp.month ? Number(sp.month) : today.getMonth() + 1; // 1-12
 
-  const plans = await getPlansForMonthAndSite(siteId, year, month);
+  const [plans, published] = await Promise.all([
+    getPlansForMonthAndSite(siteId, year, month),
+    getPublishedArticlesForMonthAndSite(siteId, year, month),
+  ]);
   const plansByDate = new Map<string, (typeof plans)[number]>();
   for (const p of plans) plansByDate.set(p.plannedDate, p);
+  // Index published articles by date. Multiple articles per day possible
+  // (e.g. early backfill + later SEO Forge publish); UI shows the first.
+  const publishedByDate = new Map<string, PublishedArticle[]>();
+  for (const a of published) {
+    const arr = publishedByDate.get(a.publishedDate) ?? [];
+    arr.push(a);
+    publishedByDate.set(a.publishedDate, arr);
+  }
 
   // Build the visible month grid (always render up to 6 rows x 7 cols; weeks start Sunday)
   const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
@@ -177,6 +192,13 @@ export default async function CalendarPage({
           <div className="grid grid-cols-7">
             {visibleCells.map((cell) => {
               const plan = plansByDate.get(cell.dateStr);
+              const publishedHere = publishedByDate.get(cell.dateStr) ?? [];
+              const seoForgePublished = publishedHere.filter((a) => a.hasTranscript);
+              const dotStatus = plan
+                ? plan.status
+                : seoForgePublished.length > 0
+                  ? "published"
+                  : null;
               return (
                 <div
                   key={cell.dateStr}
@@ -192,12 +214,12 @@ export default async function CalendarPage({
                     >
                       {cell.day}
                     </span>
-                    {plan && (
+                    {dotStatus && (
                       <span
                         className={`h-2 w-2 rounded-full ${
-                          STATUS_DOT[plan.status] ?? "bg-zinc-200"
+                          STATUS_DOT[dotStatus] ?? "bg-zinc-200"
                         }`}
-                        title={plan.status}
+                        title={dotStatus}
                       />
                     )}
                   </div>
@@ -257,6 +279,44 @@ export default async function CalendarPage({
                           view job &rarr;
                         </Link>
                       )}
+                    </div>
+                  ) : seoForgePublished.length > 0 ? (
+                    <div className="flex-1 flex flex-col gap-1">
+                      <span className="inline-block self-start text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                        Published
+                      </span>
+                      {seoForgePublished.slice(0, 2).map((a) => (
+                        <Link
+                          key={a.id}
+                          href={`/articles/${a.siteId}/${a.slug}`}
+                          className="text-xs font-medium text-zinc-800 leading-tight line-clamp-2 hover:underline"
+                        >
+                          {a.title}
+                        </Link>
+                      ))}
+                      {seoForgePublished.length > 2 && (
+                        <p className="text-[10px] text-zinc-400">
+                          +{seoForgePublished.length - 2} more
+                        </p>
+                      )}
+                      <a
+                        href={seoForgePublished[0]!.url}
+                        target="_blank"
+                        rel="noopener"
+                        className="text-[10px] text-blue-600 hover:underline mt-auto"
+                      >
+                        view live &rarr;
+                      </a>
+                    </div>
+                  ) : publishedHere.length > 0 ? (
+                    <div className="flex-1 flex flex-col gap-1">
+                      <span className="inline-block self-start text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500">
+                        Pre-existing
+                      </span>
+                      <p className="text-xs text-zinc-500 leading-tight line-clamp-2">
+                        {publishedHere.length} article
+                        {publishedHere.length === 1 ? "" : "s"} indexed
+                      </p>
                     </div>
                   ) : cell.inMonth ? (
                     <form
