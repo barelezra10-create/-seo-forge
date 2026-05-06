@@ -53,7 +53,10 @@ export type KeywordResearchInput = {
 };
 
 export async function gatherCandidates(i: KeywordResearchInput): Promise<Candidate[]> {
-  const [ideas, striking] = await Promise.all([
+  // Run Ahrefs + GSC in parallel. GSC commonly 403s on sites the token doesn't
+  // verify (e.g. PennyLime, MCA Settlement) — treat that as "no GSC data" and
+  // proceed with Ahrefs-only candidates instead of failing the whole site.
+  const [ideasResult, strikingResult] = await Promise.allSettled([
     fetchKeywordIdeas({
       seed: i.seed,
       country: "us",
@@ -62,9 +65,6 @@ export async function gatherCandidates(i: KeywordResearchInput): Promise<Candida
       apiKey: i.ahrefsKey,
     }),
     fetchStrikingDistanceQueries({
-      // URL-prefix property format works for all 6 finance-cluster sites Bar
-      // currently has access to. Future sites whose token only has
-      // sc-domain access will need a per-site override on SiteAdapter.
       siteUrl: `https://${i.domain}/`,
       refreshToken: i.gscRefreshToken,
       clientId: i.gscClientId,
@@ -75,6 +75,16 @@ export async function gatherCandidates(i: KeywordResearchInput): Promise<Candida
       minImpressions: 50,
     }),
   ]);
+
+  const ideas = ideasResult.status === "fulfilled" ? ideasResult.value : [];
+  const striking = strikingResult.status === "fulfilled" ? strikingResult.value : [];
+
+  if (ideasResult.status === "rejected") {
+    console.warn(`[gatherCandidates] Ahrefs failed for ${i.siteId}:`, (ideasResult.reason as Error).message);
+  }
+  if (strikingResult.status === "rejected") {
+    console.warn(`[gatherCandidates] GSC failed for ${i.siteId}:`, (strikingResult.reason as Error).message);
+  }
   return [
     ...ideas.map<Candidate>((k) => ({
       keyword: k.keyword,
