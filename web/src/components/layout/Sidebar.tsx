@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutGrid, Globe, FileText, TrendingUp, ListChecks, Calendar } from "lucide-react";
+import { LayoutGrid, Globe, FileText, TrendingUp, ListChecks, Calendar, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -7,6 +7,7 @@ const NAV = [
   { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/sites", label: "Sites", icon: Globe },
   { href: "/articles", label: "Articles", icon: FileText },
+  { href: "/backlinks", label: "Backlinks", icon: Link2 },
   { href: "/opportunities", label: "Opportunities", icon: TrendingUp },
   { href: "/jobs", label: "Jobs", icon: ListChecks },
 ] as const;
