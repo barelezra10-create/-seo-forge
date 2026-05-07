@@ -238,10 +238,25 @@ export default async function CalendarPage({
                         {plan.targetKeyword}
                       </p>
                       {plan.sisterLinks.length > 0 && (
-                        <p className="text-[10px] text-zinc-400">
-                          &uarr; {plan.sisterLinks.length} link
-                          {plan.sisterLinks.length === 1 ? "" : "s"}
-                        </p>
+                        <div className="text-[10px] text-zinc-500 leading-tight">
+                          <span className="text-zinc-400">links: </span>
+                          {Array.from(
+                            new Set(
+                              plan.sisterLinks.map((l) => {
+                                try {
+                                  return new URL(l.url).hostname.replace(/^www\./, "");
+                                } catch {
+                                  return l.siteId;
+                                }
+                              }),
+                            ),
+                          ).map((host, i, arr) => (
+                            <span key={host}>
+                              <span className="text-zinc-600">{host}</span>
+                              {i < arr.length - 1 ? ", " : ""}
+                            </span>
+                          ))}
+                        </div>
                       )}
                       {plan.status === "planned" && cell.inMonth && (
                         <div className="mt-auto flex gap-1">
