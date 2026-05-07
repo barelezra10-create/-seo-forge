@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { publicUrl } from "@/lib/redirect";
 import { tables } from "@seo-forge/shared";
 import { eq } from "drizzle-orm";
 
@@ -33,8 +34,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ siteId:
 
   await db.update(tables.sites).set(updates).where(eq(tables.sites.id, siteId));
 
-  const url = new URL(req.url);
-  url.pathname = `/sites/${siteId}`;
-  url.search = "";
-  return NextResponse.redirect(url, { status: 303 });
+  return NextResponse.redirect(publicUrl(req, `/sites/${siteId}`), { status: 303 });
 }

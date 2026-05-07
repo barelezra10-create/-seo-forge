@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { publicUrl } from "@/lib/redirect";
 import { tables } from "@seo-forge/shared";
 
 export async function POST(req: Request) {
@@ -40,8 +41,5 @@ export async function POST(req: Request) {
       set: { name, domain, repoUrl, contentDir, brandVoice },
     });
 
-  const url = new URL(req.url);
-  url.pathname = `/sites/${id}`;
-  url.search = "";
-  return NextResponse.redirect(url, { status: 303 });
+  return NextResponse.redirect(publicUrl(req, `/sites/${id}`), { status: 303 });
 }

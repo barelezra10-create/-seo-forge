@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { publicUrl } from "@/lib/redirect";
 import { tables } from "@seo-forge/shared";
 
 export async function POST(req: Request) {
@@ -33,8 +34,5 @@ export async function POST(req: Request) {
     });
   }
   await db.insert(tables.jobs).values(jobs);
-  const url = new URL(req.url);
-  url.pathname = "/calendar";
-  url.search = "";
-  return NextResponse.redirect(url, { status: 303 });
+  return NextResponse.redirect(publicUrl(req, "/calendar"), { status: 303 });
 }

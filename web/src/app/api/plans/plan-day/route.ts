@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { publicUrl } from "@/lib/redirect";
 import { tables } from "@seo-forge/shared";
 
 export async function POST(req: Request) {
@@ -19,8 +20,12 @@ export async function POST(req: Request) {
     status: "pending",
     payload: { date, siteId },
   });
-  const url = new URL(req.url);
-  url.pathname = "/calendar";
-  url.search = `?site=${encodeURIComponent(siteId)}&year=${date.slice(0, 4)}&month=${date.slice(5, 7)}`;
-  return NextResponse.redirect(url, { status: 303 });
+  return NextResponse.redirect(
+    publicUrl(
+      req,
+      "/calendar",
+      `?site=${encodeURIComponent(siteId)}&year=${date.slice(0, 4)}&month=${date.slice(5, 7)}`,
+    ),
+    { status: 303 },
+  );
 }

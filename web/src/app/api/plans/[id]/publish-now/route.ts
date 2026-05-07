@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { publicUrl } from "@/lib/redirect";
 import { tables } from "@seo-forge/shared";
 import { eq } from "drizzle-orm";
 
@@ -29,8 +30,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (!job) return NextResponse.json({ error: "job insert failed" }, { status: 500 });
 
-  const url = new URL(req.url);
-  url.pathname = `/jobs/${job.id}`;
-  url.search = "";
-  return NextResponse.redirect(url, { status: 303 });
+  return NextResponse.redirect(publicUrl(req, `/jobs/${job.id}`), { status: 303 });
 }
