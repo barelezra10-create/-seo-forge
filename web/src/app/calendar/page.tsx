@@ -226,17 +226,21 @@ export default async function CalendarPage({
 
                   {plan ? (
                     <div className="flex-1 flex flex-col gap-1">
-                      <span
-                        className={`inline-block self-start text-[10px] px-1.5 py-0.5 rounded ${
-                          INTENT_BADGES[plan.intent] ??
-                          "bg-zinc-100 text-zinc-600"
-                        }`}
+                      <Link
+                        href={`/plans/${plan.id}`}
+                        className="flex-1 flex flex-col gap-1 hover:bg-zinc-50/50 -m-1 p-1 rounded"
                       >
-                        {INTENT_LABELS[plan.intent] ?? plan.intent}
-                      </span>
-                      <p className="text-xs font-medium text-zinc-800 leading-tight line-clamp-3">
-                        {plan.targetKeyword}
-                      </p>
+                        <span
+                          className={`inline-block self-start text-[10px] px-1.5 py-0.5 rounded ${
+                            INTENT_BADGES[plan.intent] ??
+                            "bg-zinc-100 text-zinc-600"
+                          }`}
+                        >
+                          {INTENT_LABELS[plan.intent] ?? plan.intent}
+                        </span>
+                        <p className="text-xs font-medium text-zinc-800 leading-tight line-clamp-3">
+                          {plan.targetKeyword}
+                        </p>
                       {plan.sisterLinks.length > 0 && (
                         <div className="text-[10px] text-zinc-500 leading-tight">
                           <span className="text-zinc-400">links: </span>
@@ -258,6 +262,7 @@ export default async function CalendarPage({
                           ))}
                         </div>
                       )}
+                      </Link>
                       {plan.status === "planned" && cell.inMonth && (
                         <div className="mt-auto flex gap-1">
                           <form
