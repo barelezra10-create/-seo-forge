@@ -36,7 +36,7 @@ describe("bdiAdapter — declarations", () => {
     expect(bdiAdapter.siteId).toBe("bdi");
     expect(bdiAdapter.fileFormat).toBe("ts");
     expect(bdiAdapter.defaultSeed).toBe("business debt");
-    expect(bdiAdapter.urlPathPrefix).toBe("articles");
+    expect(bdiAdapter.urlPathPrefix).toBe("article");
   });
 
   it("buildSlug slugifies the keyword", () => {
