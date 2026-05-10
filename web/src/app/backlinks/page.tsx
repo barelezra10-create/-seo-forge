@@ -1,6 +1,10 @@
 import { TopBar } from "@/components/layout/TopBar";
 import { Card, CardContent } from "@/components/ui/card";
-import { listRecentBacklinks, getBacklinkStatsBySite } from "@/lib/queries/backlinks";
+import {
+  listRecentBacklinks,
+  getBacklinkStatsBySite,
+  listInternalExchange,
+} from "@/lib/queries/backlinks";
 import { formatNumber } from "@/lib/utils";
 
 function fmtDate(s: string | null): string {
@@ -21,11 +25,17 @@ type SearchParams = Promise<{ site?: string }>;
 
 export default async function BacklinksPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
-  const [allBacklinks, stats] = await Promise.all([
+  const [allBacklinks, stats, exchange] = await Promise.all([
     listRecentBacklinks(500),
     getBacklinkStatsBySite(),
+    listInternalExchange(200),
   ]);
   const filtered = sp.site ? allBacklinks.filter((b) => b.siteId === sp.site) : allBacklinks;
+  const filteredExchange = sp.site
+    ? exchange.filter((e) => e.sourceSiteId === sp.site || e.targetSiteId === sp.site)
+    : exchange;
+  const exchangePublishedCount = exchange.filter((e) => e.source === "published").length;
+  const exchangePlannedCount = exchange.filter((e) => e.source === "planned").length;
 
   return (
     <>
@@ -52,7 +62,68 @@ export default async function BacklinksPage({ searchParams }: { searchParams: Se
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide">
-              Recent backlinks {sp.site ? `(${sp.site})` : "(all sites)"}
+              Internal exchange
+              <span className="ml-2 text-zinc-400 font-normal normal-case">
+                {exchangePublishedCount} placed · {exchangePlannedCount} planned
+              </span>
+            </h2>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
+                  <tr>
+                    <th className="text-left px-4 py-3">When</th>
+                    <th className="text-left px-4 py-3">From</th>
+                    <th className="text-left px-4 py-3">Source article</th>
+                    <th className="text-left px-4 py-3">→ To</th>
+                    <th className="text-left px-4 py-3">Target article</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {filteredExchange.map((e, i) => (
+                    <tr key={`${e.targetUrl}-${i}`} className="hover:bg-zinc-50">
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${e.source === "published" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                          {e.source}
+                        </span>
+                        <span className="ml-2 text-xs text-zinc-500">{fmtDate(e.createdAt)}</span>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-zinc-500 whitespace-nowrap">{e.sourceSiteName}</td>
+                      <td className="px-4 py-2 truncate max-w-sm">
+                        {e.sourceUrl ? (
+                          <a href={e.sourceUrl} target="_blank" rel="noopener" className="text-blue-600 hover:underline">
+                            {e.sourceTitle}
+                          </a>
+                        ) : (
+                          <span className="text-zinc-700">{e.sourceTitle}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-zinc-500 whitespace-nowrap">{e.targetSiteName}</td>
+                      <td className="px-4 py-2 truncate max-w-sm">
+                        <a href={e.targetUrl} target="_blank" rel="noopener" className="text-blue-600 hover:underline">
+                          {e.targetTitle}
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredExchange.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                        No internal cross-links yet. They appear as articles are planned + published.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide">
+              External backlinks earned {sp.site ? `(${sp.site})` : "(all sites)"}
             </h2>
             <form className="flex items-center gap-2">
               <select
