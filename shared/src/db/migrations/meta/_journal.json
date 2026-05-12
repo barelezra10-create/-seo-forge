@@ -29,6 +29,13 @@
       "when": 1777832040216,
       "tag": "0003_steep_the_enforcers",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778577139702,
+      "tag": "0004_stiff_shatterstar",
+      "breakpoints": true
     }
   ]
 }

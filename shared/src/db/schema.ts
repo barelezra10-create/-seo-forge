@@ -189,6 +189,9 @@ export const articlePlans = pgTable(
     sisterLinks: jsonb("sister_links").notNull().default([]),
     status: planStatusEnum("status").notNull().default("planned"),
     publishedJobId: bigint("published_job_id", { mode: "number" }),
+    /** Cached Claude output for preview-before-publish. Shape: { ledeAnswer, quickFacts, body, prompt, rawResponse, durationMs }. NULL until generate-draft runs. */
+    draft: jsonb("draft"),
+    draftGeneratedAt: timestamp("draft_generated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

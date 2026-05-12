@@ -40,6 +40,17 @@ export async function runPipeline(opts: { siteId: string; jobId?: number; planId
 
     let brief: KeywordBrief;
     let sisterHits: Array<{ siteId?: string; url: string; title: string; distance?: number }>;
+    let cachedDraft:
+      | {
+          ledeAnswer: string;
+          quickFacts: string[];
+          body: string;
+          prompt: string;
+          rawResponse: string;
+          durationMs: number;
+        }
+      | null = null;
+    let cachedDraftAt: Date | null = null;
     const repo = new ContentIndexRepo(db);
 
     if (opts.planId) {
@@ -89,6 +100,19 @@ export async function runPipeline(opts: { siteId: string; jobId?: number; planId
           `using plan ${opts.planId}: "${brief.targetKeyword}" (${brief.source}, vol=${brief.volume}, kd=${brief.kd})`,
         );
       if (opts.jobId) await appendJobLog(opts.jobId, `sister links from plan: ${sisterHits.length}`);
+
+      // If a cached draft exists on this plan, use it instead of re-running Claude.
+      if (plan.draft) {
+        cachedDraft = plan.draft as unknown as {
+          ledeAnswer: string;
+          quickFacts: string[];
+          body: string;
+          prompt: string;
+          rawResponse: string;
+          durationMs: number;
+        };
+        cachedDraftAt = plan.draftGeneratedAt ?? null;
+      }
     } else {
       // 1. Covered slugs (skip already-written topics)
       const indexRows = await db
@@ -137,19 +161,38 @@ export async function runPipeline(opts: { siteId: string; jobId?: number; planId
       if (opts.jobId) await appendJobLog(opts.jobId, `sister links: ${sisterHits.length}`);
     }
 
-    // 4. Write article via claude-code
-    console.log(`[pipeline] running claude-code session (this can take 5-15 min)...`);
-    if (opts.jobId) await appendJobLog(opts.jobId, `running claude-code session (5-15 min)...`);
-    const article = await runWriteArticle({
-      brief,
-      sisterLinks: sisterHits.map((h) => ({ url: h.url, title: h.title })),
-      brandVoice: site.brandVoice,
-      siteName: site.name,
-      domain: site.domain,
-    });
-    console.log(`[pipeline] article written (${article.body.length} chars body)`);
-    if (opts.jobId)
-      await appendJobLog(opts.jobId, `article written (${article.body.length} chars body)`);
+    // 4. Write article via claude-code (or use the cached draft if one is set on the plan)
+    let article: {
+      ledeAnswer: string;
+      quickFacts: string[];
+      body: string;
+      prompt: string;
+      rawResponse: string;
+      durationMs: number;
+    };
+    if (cachedDraft) {
+      const stamp = cachedDraftAt ? cachedDraftAt.toISOString() : "unknown";
+      console.log(`[pipeline] using cached draft from ${stamp} (${cachedDraft.body.length} chars body)`);
+      if (opts.jobId)
+        await appendJobLog(
+          opts.jobId,
+          `using cached draft from ${stamp} (${cachedDraft.body.length} chars body)`,
+        );
+      article = cachedDraft;
+    } else {
+      console.log(`[pipeline] running claude-code session (this can take 5-15 min)...`);
+      if (opts.jobId) await appendJobLog(opts.jobId, `running claude-code session (5-15 min)...`);
+      article = await runWriteArticle({
+        brief,
+        sisterLinks: sisterHits.map((h) => ({ url: h.url, title: h.title })),
+        brandVoice: site.brandVoice,
+        siteName: site.name,
+        domain: site.domain,
+      });
+      console.log(`[pipeline] article written (${article.body.length} chars body)`);
+      if (opts.jobId)
+        await appendJobLog(opts.jobId, `article written (${article.body.length} chars body)`);
+    }
 
     // 5. Prepare clone so adapters that mutate existing files (BDI) can read them
     // Look up per-site PAT (GH_PAT_<SITE>) first; fall back to a single GH_PAT

@@ -19,6 +19,15 @@ export type PlanRow = {
   sisterLinks: Array<{ siteId: string; url: string; title: string; distance: number }>;
   status: "planned" | "published" | "skipped" | "failed";
   publishedJobId: number | null;
+  draft: {
+    ledeAnswer: string;
+    quickFacts: string[];
+    body: string;
+    prompt?: string;
+    rawResponse?: string;
+    durationMs?: number;
+  } | null;
+  draftGeneratedAt: Date | string | null;
 };
 
 export async function listUpcomingPlans(daysAhead = 45): Promise<PlanRow[]> {
