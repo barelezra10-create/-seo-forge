@@ -58,6 +58,9 @@ export default async function PlanDetailPage({
             </Link>
             {plan.status === "planned" && (
               <>
+                <form action={`/api/plans/${plan.id}/regenerate`} method="POST">
+                  <Button type="submit" variant="outline" size="sm">Regenerate</Button>
+                </form>
                 <form action={`/api/plans/${plan.id}/skip`} method="POST">
                   <Button type="submit" variant="outline" size="sm">Skip</Button>
                 </form>

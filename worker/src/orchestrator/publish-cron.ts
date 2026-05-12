@@ -161,7 +161,7 @@ export async function processNextSingleDayPlannerJob(): Promise<{ jobId: number 
   const db = getDb();
   const claimed = await db.execute<{
     id: number;
-    payload: { date: string; siteId: string };
+    payload: { date: string; siteId: string; excludeKeywords?: string[] };
   }>(sql`
     UPDATE jobs SET status = 'claimed', claimed_at = NOW()
     WHERE id = (
@@ -173,7 +173,7 @@ export async function processNextSingleDayPlannerJob(): Promise<{ jobId: number 
   `);
   const rows = claimed as unknown as Array<{
     id: number | string;
-    payload: { date: string; siteId: string };
+    payload: { date: string; siteId: string; excludeKeywords?: string[] };
   }>;
   if (rows.length === 0) return null;
   const raw = rows[0]!;
@@ -193,6 +193,7 @@ export async function processNextSingleDayPlannerJob(): Promise<{ jobId: number 
       gscRefreshToken: process.env.GSC_REFRESH_TOKEN!,
       gscClientId: process.env.GSC_CLIENT_ID!,
       gscClientSecret: process.env.GSC_CLIENT_SECRET!,
+      excludeKeywords: job.payload.excludeKeywords,
     });
     await db
       .update(tables.jobs)

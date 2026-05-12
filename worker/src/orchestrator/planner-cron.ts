@@ -14,6 +14,9 @@ export type PlanInput = {
   gscRefreshToken: string;
   gscClientId: string;
   gscClientSecret: string;
+  /** Keywords to exclude from candidate selection (e.g., when regenerating a plan
+   * the user didn't like). Slugified before matching. */
+  excludeKeywords?: string[];
 };
 
 function slugify(s: string): string {
@@ -45,6 +48,11 @@ export async function planSiteForDate(
     .where(sql`site_id = ${i.siteId} AND planned_date >= CURRENT_DATE AND status = 'planned'`);
   for (const p of futurePlanRows) {
     coveredSlugs.add(slugify(p.targetKeyword));
+  }
+
+  // Caller-supplied exclude list (e.g., regenerate flow).
+  if (i.excludeKeywords) {
+    for (const k of i.excludeKeywords) coveredSlugs.add(slugify(k));
   }
 
   const candidates = await gatherCandidates({
