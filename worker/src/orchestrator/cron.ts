@@ -123,8 +123,8 @@ cron.schedule("0 2 * * *", async () => {
   }
 });
 
-// Ahrefs snapshot at 3am
-cron.schedule("0 3 * * *", async () => {
+// Ahrefs snapshot weekly, Sunday 3am — stretches Ahrefs API budget 7x
+cron.schedule("0 3 * * 0", async () => {
   try {
     const r = await snapshotAllSitesAhrefs({ apiKey: env("AHREFS_API_KEY") });
     console.log(`[cron] Ahrefs snapshot: ok=${r.ok} failed=${r.failed}`);
