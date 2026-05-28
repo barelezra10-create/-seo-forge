@@ -41,12 +41,15 @@ export async function planSiteForDate(
     .where(eq(tables.contentIndex.siteId, i.siteId));
   const coveredSlugs = new Set(indexRows.map((r) => r.slug));
 
-  // Also exclude slugs already planned for upcoming dates.
-  const futurePlanRows = await db
+  // Exclude slugs from any RECENT plan (past 90 days + all future), regardless
+  // of status. This prevents picking the same top-scoring Ahrefs keyword over
+  // and over when the monthly planner is re-run mid-month or the same site is
+  // planned daily.
+  const nearbyPlanRows = await db
     .select({ targetKeyword: tables.articlePlans.targetKeyword })
     .from(tables.articlePlans)
-    .where(sql`site_id = ${i.siteId} AND planned_date >= CURRENT_DATE AND status = 'planned'`);
-  for (const p of futurePlanRows) {
+    .where(sql`site_id = ${i.siteId} AND planned_date >= (CURRENT_DATE - INTERVAL '90 days')`);
+  for (const p of nearbyPlanRows) {
     coveredSlugs.add(slugify(p.targetKeyword));
   }
 
