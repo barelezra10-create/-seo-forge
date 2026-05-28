@@ -153,50 +153,65 @@ export async function listInternalExchange(limit = 500): Promise<InternalExchang
     LIMIT ${limit}
   `);
 
+  // Some sister_links entries may be missing the "url" key, or contain a
+  // relative path. Skip rows with no usable URL so the page doesn't 500 on
+  // `new URL(null)`. Hostname lookup also guarded with a fallback.
+  function hostnameOf(u: string): string {
+    try {
+      return new URL(u).hostname.replace(/^www\./, "");
+    } catch {
+      return u;
+    }
+  }
+
   const published: InternalExchangeRow[] = (publishedRows as unknown as Array<{
     source_site_id: string;
     source_site_name: string;
     source_title: string;
     source_url: string;
-    target_url: string;
+    target_url: string | null;
     target_site_id: string | null;
     target_site_name: string | null;
     target_title: string | null;
     created_at: string;
-  }>).map((r) => ({
-    source: "published",
-    sourceSiteId: r.source_site_id,
-    sourceSiteName: r.source_site_name,
-    sourceTitle: r.source_title,
-    sourceUrl: r.source_url,
-    targetSiteId: r.target_site_id ?? "external",
-    targetSiteName: r.target_site_name ?? new URL(r.target_url).hostname.replace(/^www\./, ""),
-    targetTitle: r.target_title ?? r.target_url,
-    targetUrl: r.target_url,
-    createdAt: r.created_at,
-  }));
+  }>)
+    .filter((r) => r.target_url)
+    .map((r) => ({
+      source: "published" as const,
+      sourceSiteId: r.source_site_id,
+      sourceSiteName: r.source_site_name,
+      sourceTitle: r.source_title,
+      sourceUrl: r.source_url,
+      targetSiteId: r.target_site_id ?? "external",
+      targetSiteName: r.target_site_name ?? hostnameOf(r.target_url!),
+      targetTitle: r.target_title ?? r.target_url!,
+      targetUrl: r.target_url!,
+      createdAt: r.created_at,
+    }));
 
   const planned: InternalExchangeRow[] = (plannedRows as unknown as Array<{
     source_site_id: string;
     source_site_name: string;
     source_title: string;
-    target_url: string;
+    target_url: string | null;
     target_site_id: string | null;
     target_site_name: string | null;
     target_title: string | null;
     created_at: string;
-  }>).map((r) => ({
-    source: "planned",
-    sourceSiteId: r.source_site_id,
-    sourceSiteName: r.source_site_name,
-    sourceTitle: r.source_title,
-    sourceUrl: null,
-    targetSiteId: r.target_site_id ?? "external",
-    targetSiteName: r.target_site_name ?? new URL(r.target_url).hostname.replace(/^www\./, ""),
-    targetTitle: r.target_title ?? r.target_url,
-    targetUrl: r.target_url,
-    createdAt: r.created_at,
-  }));
+  }>)
+    .filter((r) => r.target_url)
+    .map((r) => ({
+      source: "planned" as const,
+      sourceSiteId: r.source_site_id,
+      sourceSiteName: r.source_site_name,
+      sourceTitle: r.source_title,
+      sourceUrl: null,
+      targetSiteId: r.target_site_id ?? "external",
+      targetSiteName: r.target_site_name ?? hostnameOf(r.target_url!),
+      targetTitle: r.target_title ?? r.target_url!,
+      targetUrl: r.target_url!,
+      createdAt: r.created_at,
+    }));
 
   return [...published, ...planned].slice(0, limit);
 }

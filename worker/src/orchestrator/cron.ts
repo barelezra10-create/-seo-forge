@@ -5,6 +5,7 @@ import {
   processNextPlannerJob,
   processNextSingleDayPlannerJob,
   processNextDraftJob,
+  processNextVerifyPublishJob,
 } from "./publish-cron.js";
 import { snapshotAllSitesGsc } from "./gsc-snapshot-cron.js";
 import { snapshotAllSitesAhrefs } from "./ahrefs-snapshot-cron.js";
@@ -56,6 +57,16 @@ cron.schedule("*/30 * * * * *", async () => {
     if (r) console.log(`[cron] processed draft job ${r.jobId}`);
   } catch (e) {
     console.error("[cron] draft job error:", (e as Error).message);
+  }
+});
+
+// Process verify-publish queue every 60 seconds (network-bound, longer wait OK)
+cron.schedule("0 * * * * *", async () => {
+  try {
+    const r = await processNextVerifyPublishJob();
+    if (r) console.log(`[cron] processed verify-publish job ${r.jobId}`);
+  } catch (e) {
+    console.error("[cron] verify-publish job error:", (e as Error).message);
   }
 });
 

@@ -314,12 +314,104 @@ export default async function PlanDetailPage({
           </CardContent>
         </Card>
 
-        {plan.status === "published" && plan.publishedJobId && (
+        {plan.status === "published" && (
           <Card>
-            <CardContent className="pt-6 text-sm">
-              <p className="text-zinc-500">
-                This plan was published. <Link href={`/jobs/${plan.publishedJobId}`} className="text-blue-600 hover:underline">View job log →</Link>
-              </p>
+            <CardHeader>
+              <CardTitle>Live preview — what landed on the site</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const live = plan.publishedLivePreview;
+                if (!live) {
+                  return (
+                    <p className="text-sm text-zinc-500 italic">
+                      Verify job is still running (or hasn&apos;t fired yet). Live preview will appear here once the worker fetches the deployed URL.
+                    </p>
+                  );
+                }
+                const badgeColor =
+                  live.status === "live"
+                    ? "bg-green-100 text-green-700"
+                    : live.status === "timeout"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-red-100 text-red-700";
+                const sisterColor =
+                  live.sisterLinksExpected === 0
+                    ? "text-zinc-400"
+                    : live.sisterLinksFound === live.sisterLinksExpected
+                      ? "text-green-600"
+                      : live.sisterLinksFound > 0
+                        ? "text-amber-600"
+                        : "text-red-600";
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 flex-wrap text-sm">
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${badgeColor}`}>
+                        {live.status === "live"
+                          ? "Live ✓"
+                          : live.status === "timeout"
+                            ? "Timeout"
+                            : "Error"}
+                      </span>
+                      <a href={live.url} target="_blank" rel="noopener" className="text-blue-600 hover:underline truncate max-w-[60ch]">
+                        {live.url}
+                      </a>
+                      <span className="text-xs text-zinc-400">
+                        verified {new Date(live.verifiedAt).toLocaleString()}
+                      </span>
+                    </div>
+                    {live.status === "live" && (
+                      <div className="border border-zinc-200 rounded overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={live.screenshotUrl}
+                          alt={`Screenshot of ${live.url}`}
+                          className="w-full h-auto block"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    {live.error && (
+                      <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                        {live.error}
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs text-zinc-500 uppercase tracking-wide">Live title</p>
+                        <p className="font-medium text-zinc-800 truncate">{live.liveTitle ?? "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-zinc-500 uppercase tracking-wide">Word count</p>
+                        <p className="font-medium text-zinc-800">{live.wordCount.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-zinc-500 uppercase tracking-wide">Total links</p>
+                        <p className="font-medium text-zinc-800">{live.linkCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-zinc-500 uppercase tracking-wide">Sister links inlined</p>
+                        <p className={`font-medium ${sisterColor}`}>
+                          {live.sisterLinksFound}/{live.sisterLinksExpected}
+                        </p>
+                      </div>
+                    </div>
+                    {live.liveLede && (
+                      <div>
+                        <p className="text-xs text-zinc-500 uppercase tracking-wide mb-1">Live lede</p>
+                        <p className="text-sm text-zinc-700 italic border-l-4 border-zinc-200 pl-3">{live.liveLede}</p>
+                      </div>
+                    )}
+                    {plan.publishedJobId && (
+                      <p className="text-xs text-zinc-500">
+                        <Link href={`/jobs/${plan.publishedJobId}`} className="text-blue-600 hover:underline">
+                          View publish job log →
+                        </Link>
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         )}

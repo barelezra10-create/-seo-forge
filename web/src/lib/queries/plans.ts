@@ -28,6 +28,19 @@ export type PlanRow = {
     durationMs?: number;
   } | null;
   draftGeneratedAt: Date | string | null;
+  publishedLivePreview: {
+    url: string;
+    screenshotUrl: string;
+    liveTitle: string | null;
+    liveLede: string | null;
+    wordCount: number;
+    linkCount: number;
+    sisterLinksFound: number;
+    sisterLinksExpected: number;
+    status: "live" | "timeout" | "error";
+    verifiedAt: string;
+    error?: string;
+  } | null;
 };
 
 export async function listUpcomingPlans(daysAhead = 45): Promise<PlanRow[]> {

@@ -5,6 +5,7 @@ import { runPipeline } from "../pipeline/pipeline.js";
 import { planAllSitesForDate, planSiteForDate } from "./planner-cron.js";
 import { runWriteArticle } from "../jobs/write-article.js";
 import type { KeywordBrief } from "../jobs/write-article.prompt.js";
+import { verifyPublishedArticle } from "../jobs/verify-publish.js";
 
 export type ProcessResult = { jobId: number; result: unknown };
 
@@ -276,6 +277,64 @@ export async function processNextDraftJob(): Promise<ProcessResult | null> {
         finishedAt: new Date(),
         error: msg,
       })
+      .where(eq(tables.jobs.id, job.id));
+    throw e;
+  }
+}
+
+export async function processNextVerifyPublishJob(): Promise<ProcessResult | null> {
+  const db = getDb();
+  const claimed = await db.execute<{
+    id: number;
+    payload: { planId: number | null; articleUrl: string; sisterUrls: string[] };
+  }>(sql`
+    UPDATE jobs SET status = 'claimed', claimed_at = NOW()
+    WHERE id = (
+      SELECT id FROM jobs
+      WHERE status = 'pending' AND type = 'verify-publish'
+        AND (run_after IS NULL OR run_after <= NOW())
+      ORDER BY created_at ASC
+      LIMIT 1 FOR UPDATE SKIP LOCKED
+    )
+    RETURNING id, payload
+  `);
+  const rows = claimed as unknown as Array<{
+    id: number | string;
+    payload: { planId: number | null; articleUrl: string; sisterUrls: string[] };
+  }>;
+  if (rows.length === 0) return null;
+  const raw = rows[0]!;
+  const job = { id: Number(raw.id), payload: raw.payload };
+
+  await db
+    .update(tables.jobs)
+    .set({ status: "running", startedAt: new Date() })
+    .where(eq(tables.jobs.id, job.id));
+  await appendJobLog(job.id, `[${new Date().toISOString()}] verify-publish for ${job.payload.articleUrl}`);
+
+  try {
+    const preview = await verifyPublishedArticle({
+      url: job.payload.articleUrl,
+      sisterUrls: job.payload.sisterUrls ?? [],
+      log: (line) => appendJobLog(job.id, `[${new Date().toISOString()}] ${line}`),
+    });
+    if (job.payload.planId) {
+      await db
+        .update(tables.articlePlans)
+        .set({ publishedLivePreview: preview, updatedAt: new Date() })
+        .where(eq(tables.articlePlans.id, job.payload.planId));
+    }
+    await db
+      .update(tables.jobs)
+      .set({ status: "succeeded", finishedAt: new Date(), result: preview as unknown })
+      .where(eq(tables.jobs.id, job.id));
+    return { jobId: job.id, result: preview };
+  } catch (e) {
+    const msg = (e as Error).message.slice(0, 1000);
+    await appendJobLog(job.id, `[${new Date().toISOString()}] verify-publish failed: ${msg}`);
+    await db
+      .update(tables.jobs)
+      .set({ status: "failed", finishedAt: new Date(), error: msg })
       .where(eq(tables.jobs.id, job.id));
     throw e;
   }

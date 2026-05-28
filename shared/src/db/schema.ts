@@ -192,6 +192,11 @@ export const articlePlans = pgTable(
     /** Cached Claude output for preview-before-publish. Shape: { ledeAnswer, quickFacts, body, prompt, rawResponse, durationMs }. NULL until generate-draft runs. */
     draft: jsonb("draft"),
     draftGeneratedAt: timestamp("draft_generated_at", { withTimezone: true }),
+    /** Post-publish verification — what we observed when fetching the LIVE
+     * URL after it deployed. Shape: { url, screenshotUrl, liveTitle, liveLede,
+     * wordCount, linkCount, sisterLinksFound, status: "live"|"timeout"|"error",
+     * verifiedAt, error? }. NULL until verify-publish runs. */
+    publishedLivePreview: jsonb("published_live_preview"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

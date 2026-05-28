@@ -279,6 +279,20 @@ export async function runPipeline(opts: { siteId: string; jobId?: number; planId
         .where(eq(tables.articlePlans.id, opts.planId));
     }
 
+    // 10. Enqueue a verify-publish job to fetch the live URL once it deploys.
+    //     Site deploys take 1-5 min, so we delay the first attempt by 60s.
+    await db.insert(tables.jobs).values({
+      type: "verify-publish",
+      siteId: site.id,
+      status: "pending",
+      runAfter: new Date(Date.now() + 60_000),
+      payload: {
+        planId: opts.planId ?? null,
+        articleUrl,
+        sisterUrls: sisterHits.map((h) => h.url),
+      },
+    });
+
     return {
       siteId: site.id,
       slug: primary.slug,
